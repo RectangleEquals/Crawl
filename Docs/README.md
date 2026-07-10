@@ -99,6 +99,9 @@ Every criterion from the original brief and subsequent design feedback, mapped t
 | F15 | User willing to do some art with step-by-step guidance (Blender 3.3+/Photoshop CS6, free AI tools OK); prototype art first | [01](01-art-direction.md) §5 |
 | F16 | Gadget names never clash with gear slots; PoE-style paperdoll separate from key items; gadget tab + radial UI | [06](06-gadgets.md) §1.5, §6, [05](05-items-loot-affixes.md) §2 |
 | F17 | README: game description, gameplay loop, TOC | This document |
+| F18 | User-provided fonts (Perfect DOS VGA 437, Liberation Sans) adopted; further font suggestions | [01](01-art-direction.md) §3; files in `Client/assets/fonts/` |
+| F19 | Full headless physics engine (server-authoritative, prediction/reconciliation; explosions, tether ropes, ragdolls) instead of custom kinematics | [02](02-tech-architecture.md) §4.1 (Rapier, three tiers), [03](03-networking.md) §4 |
+| F20 | Event-driven concurrency: sim never blocks on disk; persistence on a worker thread | [02](02-tech-architecture.md) §4.2, [10](10-persistence.md) §1 |
 
 ---
 

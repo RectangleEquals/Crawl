@@ -9,7 +9,10 @@ Related: [02-tech-architecture.md](02-tech-architecture.md) §5 (deployment shap
 
 ## 1. Storage Topology
 
-- **Engine:** SQLite via **better-sqlite3** (synchronous, WAL mode) on the headless server; the
+- **Engine:** SQLite via **better-sqlite3** (WAL mode) on the headless server, running on a **dedicated
+  persistence worker thread** ([02](02-tech-architecture.md) §4.2): the sim posts checkpoint jobs to an
+  event queue and never blocks on disk; inside the worker the synchronous API is a deliberate choice
+  (faster than async drivers for game-sized transactions, and SQLite serializes writers regardless). The
   singleplayer integrated server uses the same schema through a sql.js/OPFS adapter behind one storage
   interface ([02](02-tech-architecture.md) §5).
 - **Two database classes:**

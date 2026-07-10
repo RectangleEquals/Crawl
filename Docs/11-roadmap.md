@@ -20,9 +20,11 @@ viewer.
 at 60 fps at 480×270 internal on a mid laptop.
 
 ## M2 — The Wire (walking skeleton)
-Shared ECS + 30 Hz fixed tick; headless server hosting one area island; WebSocket transport + binary
-protocol; client prediction/reconciliation + interpolation ([03](03-networking.md) §3–4); first-person
-controller (+ third-person camera shift); action-map input with KB/M + gamepad hot-swap
+Shared ECS + 30 Hz fixed tick; headless server hosting one area island **with its Rapier world**
+([02](02-tech-architecture.md) §4.1); WebSocket transport + binary protocol; client
+prediction/reconciliation + interpolation ([03](03-networking.md) §3–4) including the client Rapier mirror;
+Rapier-kinematic first-person controller (+ third-person camera shift); action-map input with KB/M +
+gamepad hot-swap
 ([02](02-tech-architecture.md) §6); **one transition object** between two areas with loading plate and
 descriptor streaming; integrated Web Worker server running the same code (singleplayer parity).
 **Accept:** two browsers + one bot walk the same two areas at 150 ms simulated RTT without rubber-banding;
@@ -33,8 +35,11 @@ Damage/mitigation math, downed state, combo-tag components and first four tags (
 Launch — [04](04-classes-progression.md) §2); Warden kit (block/Bulwark, ward walls, Launch→Slam); three
 Furrowmouth enemy families on utility-AI archetypes ([08](08-enemies-bosses.md) §2–3); lag-compensated
 melee/hitscan validation.
-**Accept:** a Warden + one bot clear a populated chamber; tag combos land server-authoritatively; fights
-feel Barony-lethal per [08](08-enemies-bosses.md) §5 Reach-1 targets.
+Explosion impulses (Launch→Slam shoves bodies for real) and first cosmetic ragdolls
+([02](02-tech-architecture.md) §4.1 Tier 3).
+**Accept:** a Warden + one bot clear a populated chamber; tag combos land server-authoritatively; a Slam
+visibly launches enemies and deaths ragdoll client-side; fights feel Barony-lethal per
+[08](08-enemies-bosses.md) §5 Reach-1 targets.
 
 ## M4 — The Director (one Reach)
 Region graph grammar + assumed fill + reachability regression ([07](07-procgen.md) §5) over the first two

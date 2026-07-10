@@ -61,9 +61,18 @@ they get the same palette discipline as everything else.
 
 ## 3. UI Art Direction
 
-- **Chunky, diegetic-leaning retro UI**: thick bordered panels, big pixel-crisp serif-adjacent bitmap font
-  for headers, clean readable sans bitmap for body. UI renders at native resolution (readability wins over
-  purism) but uses the palette and dither language of the world.
+- **Chunky, diegetic-leaning retro UI**: thick bordered panels, pixel-crisp bitmap type for flavor,
+  legible sans for information. UI renders at native resolution (readability wins over purism) but uses
+  the palette and dither language of the world.
+- **Typography** (fonts live in `Client/assets/fonts/`, licenses alongside):
+  | Font | Role | Notes |
+  |---|---|---|
+  | **Perfect DOS VGA 437** (user-provided) | HUD numerals, terminal/console-flavored text, damage numbers, debug overlay, loading-plate captions | Use the `Win` variant as primary (Windows-codepage glyph coverage); render at integer multiples of its native size — no fractional scaling |
+  | **Liberation Sans** (user-provided, w/ Bold·Italic·BoldItalic) | Body text: tooltips, item affixes, chat, menus, lore blurbs — anything needing sustained legibility or bold/italic emphasis | Metrically Arial-compatible; SIL OFL licensed |
+  | **Alagard** (in project — free, by Hewett Tsoi) | Display headers: screen titles, area-name reveals, boss names, rarity headers | Medieval pixel display face — the dark-fantasy signature; pairs beautifully with DOS VGA |
+  | **m5x7** (in project — free, by Daniel Linssen) | Very dense small pixel UI (stat sheets, Astrolabe labels) where DOS VGA runs too wide | Tiny but shockingly legible |
+  Rule of thumb: **Alagard announces, DOS VGA flavors, Liberation informs.** Any new font must be free
+  (OFL/free-for-commercial) and ship with its license file.
 - **Paperdoll inventory** (PoE-style): character silhouette with gear slots; grid inventory beside it.
   **Gadgets never appear on the paperdoll** — they live in a separate *Instruments* tab and a quick-use
   radial menu ([06-gadgets.md](06-gadgets.md) §6).

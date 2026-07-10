@@ -16,9 +16,9 @@ Related: [03-networking.md](03-networking.md) (protocol), [07-procgen.md](07-pro
 | Client rendering | **Three.js** + custom shaders | Mature, documented, easy custom vertex/post shaders for the PSX layer ([01](01-art-direction.md) §2) |
 | Client build | **Vite** | Fast dev loop, worker bundling, asset pipeline hooks |
 | Server runtime | **Node.js** (LTS), headless | No rendering; runs simulation + generation + persistence |
-| Persistence | **better-sqlite3** (SQLite, WAL mode) | Synchronous, fast, single-file; schema in [10](10-persistence.md) |
+| Persistence | **better-sqlite3** (SQLite, WAL mode) **on a dedicated persistence worker thread** | Fast single-file storage; sync API *inside* the worker, event-driven job queue from the sim's view — the tick loop never blocks on disk (§4.2, [10](10-persistence.md) §1) |
 | Transport | **WebSocket (`ws`)** behind a transport interface | See [03](03-networking.md) §1; WebRTC possible later without refactor |
-| Physics | Custom kinematic character/projectile physics on the collision grid | Full rigid-body engine unnecessary; determinism and server cost win |
+| Physics | **Rapier** (`@dimforge/rapier3d-compat`, Rust→WASM) | Full rigid-body engine, server-side authoritative: cross-platform deterministic WASM builds, built-in kinematic character controller, impulse/multibody joints (tether ropes, ragdolls), world snapshots; fastest maintained option for web (≈3–4× cannon-es); runs identically in Node, browser, and Web Worker (§4.1) |
 | Tests | Vitest + headless bot soak harness ([09](09-modes-social.md) §3.4) | Simulation is renderer-free by design, so it tests natively |
 
 ## 2. Repository Layout (pnpm workspaces)
@@ -70,6 +70,47 @@ Node-only API (injected interfaces for time/storage), and no floating-point nond
   on re-entry ([09](09-modes-social.md) §Death).
 - **Interaction layer:** combat, combo tags ([04](04-classes-progression.md) §2), gadget capability checks
   ([06](06-gadgets.md)), interactions (doors, shrines, Obelisk), loot generation ([05](05-items-loot-affixes.md)).
+
+### 4.1 Physics Architecture (Rapier, three tiers)
+
+Each area island owns a **Rapier world** stepped in lockstep with the 30 Hz sim tick. Rapier's
+WASM build is cross-platform deterministic (same version + same op order ⇒ identical results on any
+machine — stronger than our replayable-determinism requirement, and it composes with our seeded-RNG rules:
+no `Math.sin`-style host math feeds the sim, which `Shared/math` already mandates). One WASM binary runs
+identically on the Node server, the singleplayer Web Worker, and the client's prediction mirror.
+
+| Tier | Where | What | Networked? |
+|---|---|---|---|
+| **1 — Authoritative gameplay** | Server island world | Kinematic character controllers (Rapier's built-in: autostep, ground-snap, moving platforms) for players/bots/enemies; projectiles; **explosion impulses** (spells shove enemies, pop breakables); **tether/rope dynamics** (Graviton Tether swings, Threadspool lines — joint chains / rope joints); pushable props, collapsing spans, physics puzzles | Yes — via snapshots ([03](03-networking.md) §3) |
+| **2 — Predicted** | Client mirror world | The local player's controller + their in-flight projectiles + the tether while *they* swing it, simulated with the same Rapier code and reconciled against server state ([03](03-networking.md) §4) | Reconciled |
+| **3 — Cosmetic** | Client only | **Ragdoll deaths** (corpse hand-off from animated skeleton to a client-local ragdoll seeded by the killing impulse event), debris, shell casings, cloth flourish | Never — fire-and-forget, zero bandwidth, zero server cost |
+
+Rules that keep this honest: anything that affects gameplay outcomes lives in Tier 1, full stop (a ragdoll
+can never block a doorway; a cosmetic debris chunk can never hide a hitbox). Tier-3 effects are *seeded* by
+authoritative events (death impulse vector, explosion origin/magnitude) so every client's cosmetics look
+plausibly identical without being synced. Lag compensation for hits keeps the cheap **hitbox-history ring
+buffer** ([03](03-networking.md) §4) — we rewind hitboxes, not the whole physics world; Rapier's
+`world.createSnapshot()`/`restoreSnapshot()` is reserved for checkpoint/debug/replay tooling, not the hot
+path. Sleeping-body management + per-island worlds keep server cost linear in *active* areas, and islands
+with no players freeze entirely ([§4](#4-simulation-core-sharedsim)).
+
+### 4.2 Concurrency Model
+
+Node is event-driven by nature; the design leans into it rather than fighting it:
+
+- **Sim thread(s):** the 30 Hz tick loop runs on the main event loop; area islands are independent by
+  construction (§4), so expeditions (or islands) can be sharded across `worker_threads` when profiling
+  says so — the interface is already message-passing ([03](03-networking.md) §1), making that move cheap.
+- **Persistence worker:** all SQLite access lives on a dedicated worker thread with a job queue.
+  *Inside* the worker, better-sqlite3's synchronous API is used deliberately — for game-sized
+  transactions it outperforms async drivers (no thread-pool round-trip per query), and SQLite serializes
+  writers anyway. From the sim's perspective every checkpoint is a fire-and-forget event
+  ([10](10-persistence.md) §4); the tick loop never touches disk.
+- **Generation jobs** ([07](07-procgen.md) §7) run off the hot path (queued jobs, worker-shardable same as
+  islands).
+- **Client side:** render thread never simulates the world — the integrated server is already a Web
+  Worker ([§5](#5-three-deployment-shapes-one-sim)), so a same-PC host pays for sim+physics on a separate
+  core from rendering.
 
 ## 5. Three Deployment Shapes, One Sim
 
@@ -123,9 +164,10 @@ Node-only API (injected interfaces for time/storage), and no floating-point nond
 
 - Single Node process hosts N expeditions; each expedition owns its area islands, party state, and a
   world SQLite file ([10](10-persistence.md)). CPU scaling knob: expeditions per process.
-- Subsystems: socket gateway (auth, session resume) → expedition manager → area islands (30 Hz) →
-  generation service ([07](07-procgen.md), runs Director jobs off the hot path) → persistence writer
-  (transactional checkpoints) → global chat bus (cross-lobby, [09](09-modes-social.md) §4).
+- Subsystems: socket gateway (auth, session resume) → expedition manager → area islands (30 Hz, each with
+  its Rapier world — §4.1) → generation service ([07](07-procgen.md), runs Director jobs off the hot path) →
+  persistence writer (dedicated worker thread — §4.2, transactional checkpoints) → global chat bus
+  (cross-lobby, [09](09-modes-social.md) §4).
 - Bots are server-side clients: they submit the same action-map inputs through the same interface as
   players ([09](09-modes-social.md) §3).
 
