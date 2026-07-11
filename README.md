@@ -26,7 +26,33 @@ pnpm typecheck      # strict TS across all packages
 pnpm build          # production build
 ```
 
-### M1 viewer controls
+### Running M2 (the Wire)
 
-Click the canvas to capture the mouse. **WASD** move · **Q/E** down/up · **Shift** fast ·
-**1/2/3** internal resolution (320×180 / 480×270 / 640×360) · **Esc** release mouse.
+```sh
+pnpm dev            # client only → auto-falls back to SOLO (integrated worker server + bot)
+pnpm dev:online     # headless server (ws://localhost:8787) + client together
+```
+
+URL parameters: `?mode=solo|online` · `?name=YourName` · `?rtt=150` (simulated latency) ·
+`?touch=1` (force the virtual gamepad) · `?lowfx=1` (skip volumetrics — headless/perf testing) ·
+`?server=ws://host:8787` (explicit server).
+
+**Controls:** click to capture the mouse — **WASD** move · **Space** jump · **Shift** sprint ·
+**V** first/third person · **1/2/3** internal resolution · **Esc** release. Gamepads (Xbox layout)
+hot-swap automatically: left stick move, right stick look, **A** jump, **LB/L3** sprint, **Y** camera.
+Touch devices get an on-screen virtual gamepad automatically.
+
+### Remote playtesting (tablet/phone)
+
+The dev server listens on all interfaces. To allow a DNS hostname (e.g. a DDNS address), put it in
+**`Client/.env.local`** (gitignored — keep private hostnames out of the repo):
+
+```
+CRAWLSTAR_ALLOWED_HOST=your.ddns.hostname
+```
+
+With ports **5173** (client, TCP) and **8787** (game ws, TCP) forwarded to this PC, open
+`http://your.ddns.hostname:5173/?name=Tablet` in mobile Chrome — the client connects its WebSocket to
+the same hostname automatically. LAN works the same via the PC's local IP (no env entry needed).
+⚠ A Vite dev server + an unauthenticated game server are exposed while forwarded — fine for playtest
+sessions, but close the forwards (or re-enable the firewall) when not testing.

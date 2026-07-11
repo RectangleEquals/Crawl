@@ -10,8 +10,13 @@
   "packageManager": "pnpm@11.11.0",
   "scripts": {
     "dev": "pnpm --filter @crawlstar/client dev",
+    "dev:server": "pnpm --filter @crawlstar/server dev",
+    "dev:online": "concurrently -n server,client -c yellow,cyan \"pnpm --filter @crawlstar/server dev\" \"pnpm --filter @crawlstar/client dev\"",
     "build": "pnpm -r --if-present build",
     "typecheck": "pnpm -r --if-present typecheck",
     "test": "pnpm -r --if-present test"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.0"
   }
 }

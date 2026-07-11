@@ -47,7 +47,7 @@ class VolumetricLightPass extends Pass {
 
   constructor(
     private readonly camera: THREE.PerspectiveCamera,
-    private readonly light: THREE.DirectionalLight,
+    private light: THREE.DirectionalLight,
     sceneTexture: THREE.Texture,
     depthTexture: THREE.DepthTexture,
   ) {
@@ -158,6 +158,11 @@ class VolumetricLightPass extends Pass {
     this.fsQuad = new FullScreenQuad(this.material);
   }
 
+  setLight(light: THREE.DirectionalLight): void {
+    this.light = light;
+    (this.material.uniforms["tShadow"] as THREE.IUniform).value = null;
+  }
+
   /** Per-frame uniform sync; call before composer.render(). */
   update(dt: number): void {
     this.time += dt;
@@ -236,7 +241,7 @@ export class PsxPipeline {
 
   constructor(
     canvas: HTMLCanvasElement,
-    private readonly scene: THREE.Scene,
+    private scene: THREE.Scene,
     private readonly camera: THREE.PerspectiveCamera,
     keyLight: THREE.DirectionalLight,
     res: InternalRes,
@@ -284,6 +289,12 @@ export class PsxPipeline {
 
   get internalRes(): InternalRes {
     return this.res;
+  }
+
+  /** Swap the rendered scene (area transitions). */
+  setScene(scene: THREE.Scene, keyLight: THREE.DirectionalLight): void {
+    this.scene = scene;
+    this.volumetricPass.setLight(keyLight);
   }
 
   setInternalResolution(res: InternalRes): void {

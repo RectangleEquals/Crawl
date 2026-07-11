@@ -24,6 +24,20 @@ export interface MeshData {
 
 export type Vec3 = readonly [number, number, number];
 
+/** Axis-aligned world-space box (colliders, triggers). */
+export interface WorldBox {
+  min: Vec3;
+  max: Vec3;
+}
+
+export function boxContains(b: WorldBox, p: Vec3): boolean {
+  return (
+    p[0] >= b.min[0] && p[0] <= b.max[0] &&
+    p[1] >= b.min[1] && p[1] <= b.max[1] &&
+    p[2] >= b.min[2] && p[2] <= b.max[2]
+  );
+}
+
 function lerp3(a: Vec3, b: Vec3, t: number): Vec3 {
   return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
 }

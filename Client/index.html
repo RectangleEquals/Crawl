@@ -20,7 +20,14 @@
     }
 
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { height: 100%; background: #000; overflow: hidden; }
+    html, body {
+      height: 100%;
+      background: #000;
+      overflow: hidden;
+      /* the game owns all touch gestures — no scroll/zoom/refresh hijacking */
+      touch-action: none;
+      overscroll-behavior: none;
+    }
 
     #frame {
       height: 100vh;
@@ -54,6 +61,12 @@
       margin-top: 6px;
     }
     .hud-help { color: #557a5a; }
+    .hud-area {
+      font-family: "Alagard", "DOS VGA", monospace;
+      font-size: 20px;
+      color: #9ab8d8;
+    }
+    .hud-roster { margin-top: 10px; font-family: "DOS VGA", monospace; font-size: 14px; color: #86a88c; }
     .hud-prompt {
       position: absolute;
       left: 50%;
@@ -65,6 +78,77 @@
       animation: pulse 1.6s ease-in-out infinite;
     }
     @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+    /* virtual gamepad (touch) */
+    #touch-controls { position: fixed; inset: 0; pointer-events: none; z-index: 40; }
+    .tc-stick {
+      position: absolute;
+      width: 112px; height: 112px;
+      border: 2px solid rgba(126, 224, 106, 0.4);
+      border-radius: 50%;
+      background: rgba(20, 30, 22, 0.25);
+      opacity: 0.35;
+      pointer-events: none;
+      left: 12vw; top: 62vh;
+    }
+    .tc-nub {
+      position: absolute;
+      width: 44px; height: 44px;
+      border-radius: 50%;
+      background: rgba(126, 224, 106, 0.5);
+      left: 34px; top: 34px;
+    }
+    .tc-btn {
+      position: absolute;
+      pointer-events: auto;
+      font-family: "DOS VGA", monospace;
+      font-size: 14px;
+      color: #b8e6a0;
+      border: 2px solid rgba(126, 224, 106, 0.45);
+      border-radius: 50%;
+      background: rgba(20, 30, 22, 0.35);
+      display: flex; align-items: center; justify-content: center;
+      user-select: none; -webkit-user-select: none; touch-action: none;
+    }
+    .tc-btn.tc-held { background: rgba(126, 224, 106, 0.35); }
+    .tc-jump { width: 84px; height: 84px; right: 6vw; bottom: 10vh; }
+    .tc-sprint { width: 64px; height: 64px; right: calc(6vw + 100px); bottom: 6vh; font-size: 12px; }
+    .tc-cam { width: 54px; height: 54px; right: 6vw; bottom: calc(10vh + 104px); font-size: 12px; }
+
+    #loading-plate {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background:
+        repeating-linear-gradient(0deg, rgba(0,0,0,0.22) 0 2px, transparent 2px 4px),
+        radial-gradient(ellipse at 50% 60%, #1d2432 0%, #12161f 55%, #0a0c12 100%);
+      z-index: 50;
+      transition: opacity 0.25s ease;
+      text-align: center;
+      flex-direction: column;
+    }
+    .plate-kicker {
+      font-family: "DOS VGA", monospace;
+      font-size: 16px;
+      color: #557a5a;
+      letter-spacing: 3px;
+    }
+    .plate-name {
+      font-family: "Alagard", "DOS VGA", monospace;
+      font-size: 54px;
+      color: #b8e6a0;
+      margin: 14px 0 18px;
+      text-shadow: 3px 3px 0 #000;
+    }
+    .plate-hint {
+      font-family: "Liberation Sans", sans-serif;
+      font-style: italic;
+      font-size: 16px;
+      color: #7d8aa0;
+      max-width: 520px;
+    }
   </style>
 </head>
 <body>

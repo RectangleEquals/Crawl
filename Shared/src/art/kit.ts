@@ -4,8 +4,13 @@
  * grid (Docs/07 §5). Deliberately chunky: PSX budgets are the aesthetic.
  */
 
-import { MeshBuilder, type Vec3 } from "./mesh.js";
+import { MeshBuilder, type Vec3, type WorldBox } from "./mesh.js";
 import type { Rng } from "../math/rng.js";
+
+/** Push a solid collider box (min/max corners) if a collector is given. */
+function solid(col: WorldBox[] | undefined, min: Vec3, max: Vec3): void {
+  col?.push({ min, max });
+}
 
 export const MODULE = 2; // meters per grid cell
 export const WALL_H = 4; // chamber wall height
@@ -46,7 +51,7 @@ function add(a: Vec3, b: Vec3): Vec3 {
  * Floor covering [x0,y0]→[x1,y1] cells; top faces only, one quad PER CELL —
  * large polygons warp hard under affine texturing (the PSX subdivision rule).
  */
-export function floorSlab(b: MeshBuilder, x0: number, y0: number, x1: number, y1: number): void {
+export function floorSlab(b: MeshBuilder, x0: number, y0: number, x1: number, y1: number, col?: WorldBox[]): void {
   for (let cx = x0; cx < x1; cx++) {
     for (let cy = y0; cy < y1; cy++) {
       b.box([cx * MODULE, cy * MODULE, -0.2], [(cx + 1) * MODULE, (cy + 1) * MODULE, 0], UV, {
@@ -54,13 +59,15 @@ export function floorSlab(b: MeshBuilder, x0: number, y0: number, x1: number, y1
       });
     }
   }
+  solid(col, [x0 * MODULE, y0 * MODULE, -0.2], [x1 * MODULE, y1 * MODULE, 0]);
 }
 
 /** Ceiling slab; bottom face only. */
-export function ceilingSlab(b: MeshBuilder, x0: number, y0: number, x1: number, y1: number, h: number): void {
+export function ceilingSlab(b: MeshBuilder, x0: number, y0: number, x1: number, y1: number, h: number, col?: WorldBox[]): void {
   b.box([x0 * MODULE, y0 * MODULE, h], [x1 * MODULE, y1 * MODULE, h + 0.3], UV, {
     px: false, nx: false, py: false, ny: false, pz: false,
   });
+  solid(col, [x0 * MODULE, y0 * MODULE, h], [x1 * MODULE, y1 * MODULE, h + 0.3]);
 }
 
 export type WallDir = "n" | "s" | "e" | "w";
@@ -69,15 +76,27 @@ export type WallDir = "n" | "s" | "e" | "w";
  * One straight wall segment on the edge of cell (cx, cy), facing into the
  * room. 0.3 m thick, WALL_H tall, one module long.
  */
-export function wallSegment(b: MeshBuilder, cx: number, cy: number, dir: WallDir): void {
+export function wallSegment(b: MeshBuilder, cx: number, cy: number, dir: WallDir, col?: WorldBox[]): void {
   const x = cx * MODULE;
   const y = cy * MODULE;
   const t = 0.3;
   switch (dir) {
-    case "s": b.box([x, y, 0], [x + MODULE, y + t, WALL_H], UV, { ny: false, pz: false, nz: false }); break;
-    case "n": b.box([x, y + MODULE - t, 0], [x + MODULE, y + MODULE, WALL_H], UV, { py: false, pz: false, nz: false }); break;
-    case "w": b.box([x, y, 0], [x + t, y + MODULE, WALL_H], UV, { nx: false, pz: false, nz: false }); break;
-    case "e": b.box([x + MODULE - t, y, 0], [x + MODULE, y + MODULE, WALL_H], UV, { px: false, pz: false, nz: false }); break;
+    case "s":
+      b.box([x, y, 0], [x + MODULE, y + t, WALL_H], UV, { ny: false, pz: false, nz: false });
+      solid(col, [x, y, 0], [x + MODULE, y + t, WALL_H]);
+      break;
+    case "n":
+      b.box([x, y + MODULE - t, 0], [x + MODULE, y + MODULE, WALL_H], UV, { py: false, pz: false, nz: false });
+      solid(col, [x, y + MODULE - t, 0], [x + MODULE, y + MODULE, WALL_H]);
+      break;
+    case "w":
+      b.box([x, y, 0], [x + t, y + MODULE, WALL_H], UV, { nx: false, pz: false, nz: false });
+      solid(col, [x, y, 0], [x + t, y + MODULE, WALL_H]);
+      break;
+    case "e":
+      b.box([x + MODULE - t, y, 0], [x + MODULE, y + MODULE, WALL_H], UV, { px: false, pz: false, nz: false });
+      solid(col, [x + MODULE - t, y, 0], [x + MODULE, y + MODULE, WALL_H]);
+      break;
   }
 }
 
@@ -85,7 +104,7 @@ export function wallSegment(b: MeshBuilder, cx: number, cy: number, dir: WallDir
  * Arched doorway segment (south/north walls only for M1): jambs to 2.4 m,
  * stepped chunky lintel, solid wall above — the PSX arch.
  */
-export function archSegment(b: MeshBuilder, trim: MeshBuilder, cx: number, cy: number, dir: "n" | "s"): void {
+export function archSegment(b: MeshBuilder, trim: MeshBuilder, cx: number, cy: number, dir: "n" | "s", col?: WorldBox[]): void {
   const x = cx * MODULE;
   const y = dir === "s" ? cy * MODULE : cy * MODULE + MODULE - 0.3;
   const y1 = y + 0.3;
@@ -102,20 +121,25 @@ export function archSegment(b: MeshBuilder, trim: MeshBuilder, cx: number, cy: n
   b.box([x, y, openTop + 0.7], [x + MODULE, y1, WALL_H], UV, { pz: false, nz: false });
   // bronze keystone accent
   trim.box([x + MODULE / 2 - 0.2, y - 0.05, openTop + 0.25], [x + MODULE / 2 + 0.2, y1 + 0.05, openTop + 0.75], 1, {});
+  // colliders: jambs solid, lintel-and-above solid — the opening stays open
+  solid(col, [x, y, 0], [x + jamb, y1, openTop]);
+  solid(col, [x + MODULE - jamb, y, 0], [x + MODULE, y1, openTop]);
+  solid(col, [x, y, openTop], [x + MODULE, y1, WALL_H]);
 }
 
 /** Fluted column with plinth and capital at cell center (cx, cy). */
-export function column(shaft: MeshBuilder, trim: MeshBuilder, cx: number, cy: number): void {
+export function column(shaft: MeshBuilder, trim: MeshBuilder, cx: number, cy: number, col?: WorldBox[]): void {
   const x = cx * MODULE + MODULE / 2;
   const y = cy * MODULE + MODULE / 2;
   const w = 0.28; // half-width of shaft
   trim.box([x - w - 0.12, y - w - 0.12, 0], [x + w + 0.12, y + w + 0.12, 0.35], 1, { nz: false });
   shaft.box([x - w, y - w, 0.35], [x + w, y + w, WALL_H - 0.45], UV * 2, { pz: false, nz: false });
   trim.box([x - w - 0.12, y - w - 0.12, WALL_H - 0.45], [x + w + 0.12, y + w + 0.12, WALL_H], 1, { pz: false });
+  solid(col, [x - w - 0.12, y - w - 0.12, 0], [x + w + 0.12, y + w + 0.12, WALL_H]);
 }
 
 /** Raised dais: stepped platform of stone slabs centered at (cx, cy) cells. */
-export function dais(b: MeshBuilder, cx: number, cy: number): { top: Vec3 } {
+export function dais(b: MeshBuilder, cx: number, cy: number, col?: WorldBox[]): { top: Vec3 } {
   const x = cx * MODULE;
   const y = cy * MODULE;
   const steps = 3;
@@ -127,6 +151,7 @@ export function dais(b: MeshBuilder, cx: number, cy: number): { top: Vec3 } {
       UV,
       { nz: false },
     );
+    solid(col, [x - 2 + inset, y - 2 + inset, i * 0.25], [x + 2 - inset, y + 2 - inset, (i + 1) * 0.25]);
   }
   return { top: [x, y, steps * 0.25] };
 }

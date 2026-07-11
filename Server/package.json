@@ -8,10 +8,12 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@crawlstar/shared": "workspace:*"
+    "@crawlstar/shared": "workspace:*",
+    "ws": "^8.18.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
+    "@types/ws": "^8.5.12",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0"
   }

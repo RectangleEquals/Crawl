@@ -15,6 +15,9 @@ coverage/
 *.db-wal
 *.db-shm
 
+# Local env files (private hostnames, keys — never commit)
+*.local
+
 # Editor/OS noise
 .DS_Store
 Thumbs.db

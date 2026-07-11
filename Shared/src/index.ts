@@ -1,2 +1,16 @@
 export * from "./math/index.js";
 export * from "./art/index.js";
+export * from "./sim/constants.js";
+export { initPhysics, AreaPhysics, CharacterBody } from "./sim/physics.js";
+export { stepCharacter, animFor } from "./sim/character.js";
+export type { CharState, AnimState } from "./sim/character.js";
+export { AreaIsland } from "./sim/area.js";
+export type { IslandEntity } from "./sim/area.js";
+export * from "./protocol/messages.js";
+export { ByteReader, ByteWriter } from "./protocol/codec.js";
+export type { Transport, ClientConnection, ConnectionListener } from "./protocol/transport.js";
+export { buildDemoWorld, chamberOptionsFor } from "./world/demoWorld.js";
+export type { DemoWorld, AreaDef, PortalLink } from "./world/demoWorld.js";
+export { GameHost } from "./host/gameHost.js";
+export type { GameHostOptions } from "./host/gameHost.js";
+export { WanderBot } from "./host/bot.js";

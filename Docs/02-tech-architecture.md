@@ -142,6 +142,11 @@ Node is event-driven by nature; the design leans into it rather than fighting it
 - **Smart device detection:** the last device to produce meaningful input becomes *active*; all UI glyphs
   swap instantly ([01](01-art-direction.md) §3). Hot-swap mid-session is seamless; both devices can rest
   connected.
+- **Touch (user-requested):** a third device class alongside KB/M and gamepad — an on-screen **virtual
+  gamepad** (left virtual stick = move, right-zone drag = look, JUMP/SPRINT/CAM buttons) that appears on
+  first touch (or `?touch=1`) and publishes into the same action map. Primarily a debugging/remote-test
+  surface today; the path to real mobile support later. Native Bluetooth controllers on mobile already
+  work via the standard Gamepad API path. Pointer lock stays a mouse-only concept.
 - **UI navigation on gamepad:** every screen's focusable elements register in a **focus graph** (spatial
   neighbors + explicit overrides); left stick/d-pad walks the graph; shoulder keys switch tabs; gadget
   selection uses the radial menu ([06](06-gadgets.md) §6). Mouse users get the same screens with pointer

@@ -1,17 +1,13 @@
 /**
- * Reconstructs the Shared-generated chamber into a Three scene: geometry
- * conversion at the space boundary, PSX-patched materials, biome lighting.
- * Content decisions all live in Shared (Docs/02 §2 prime directive).
+ * Builds the render scene for an area from its (already generated) chamber
+ * data — geometry conversion at the space boundary, PSX materials, lighting.
+ * The session owns generation; this file only visualizes (Docs/02 §2).
  */
 
 import * as THREE from "three";
 import {
-  SUNKEN_PARISH,
-  generateChamber,
-  generateKitTextures,
-  rampRgb,
-  Rng,
-  type MeshData,
+  SUNKEN_PARISH, generateKitTextures, rampRgb, Rng,
+  type AreaRef, type ChamberData, type MeshData,
 } from "@crawlstar/shared";
 import { convertIndices, convertTriples, worldVecToRender } from "../render/space.js";
 import { psxify, toDataTexture } from "../render/psx/materials.js";
@@ -22,18 +18,16 @@ export interface FlickerLight {
   phase: number;
 }
 
-export interface BuiltChamber {
+export interface BuiltArea {
   scene: THREE.Scene;
-  spawnPosition: THREE.Vector3;
-  triangleCount: number;
   keyLight: THREE.DirectionalLight;
   flickerLights: FlickerLight[];
+  triangleCount: number;
 }
 
-export function buildChamberScene(seed: string): BuiltChamber {
+export function buildAreaScene(ref: AreaRef, chamber: ChamberData): BuiltArea {
   const style = SUNKEN_PARISH;
-  const chamber = generateChamber(style, seed);
-  const textures = generateKitTextures(style, new Rng(seed));
+  const textures = generateKitTextures(style, new Rng(ref.seed));
 
   const scene = new THREE.Scene();
   const fogColor = new THREE.Color(style.fog.color);
@@ -56,7 +50,6 @@ export function buildChamberScene(seed: string): BuiltChamber {
     scene.add(mesh);
   }
 
-  // ambient: cold hemisphere per style
   const hemi = new THREE.HemisphereLight(
     new THREE.Color(style.lightMood.ambientColor),
     new THREE.Color("#0a0c12"),
@@ -64,7 +57,6 @@ export function buildChamberScene(seed: string): BuiltChamber {
   );
   scene.add(hemi);
 
-  // key: moonlight raking through the collapsed roof, shadow-casting
   const bounds = new THREE.Box3().setFromObject(scene);
   const center = bounds.getCenter(new THREE.Vector3());
   const keyDir = new THREE.Vector3(...worldVecToRender(chamber.keyDir)).normalize();
@@ -86,7 +78,6 @@ export function buildChamberScene(seed: string): BuiltChamber {
   key.shadow.normalBias = 0.05;
   scene.add(key, key.target);
 
-  // placed point lights: gloam shards + flickering torches
   const flickerLights: FlickerLight[] = [];
   let phase = 0;
   for (const spec of chamber.pointLights) {
@@ -98,13 +89,7 @@ export function buildChamberScene(seed: string): BuiltChamber {
     }
   }
 
-  return {
-    scene,
-    spawnPosition: new THREE.Vector3(...worldVecToRender(chamber.spawn.position)),
-    triangleCount,
-    keyLight: key,
-    flickerLights,
-  };
+  return { scene, keyLight: key, flickerLights, triangleCount };
 }
 
 function buildMesh(
