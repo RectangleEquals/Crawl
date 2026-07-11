@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="icon" href="data:," />
+  <title>CrawlStar — M1</title>
+  <style>
+    @font-face {
+      font-family: "DOS VGA";
+      src: url("/fonts/PerfectDosVGA437/Perfect DOS VGA 437 Win.ttf") format("truetype");
+    }
+    @font-face {
+      font-family: "Alagard";
+      src: url("/fonts/Alagard/alagard.ttf") format("truetype");
+    }
+    @font-face {
+      font-family: "Liberation Sans";
+      src: url("/fonts/LiberationSans/LiberationSans-Regular.ttf") format("truetype");
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; background: #000; overflow: hidden; }
+
+    #frame {
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #game {
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+      background: #000;
+    }
+
+    #hud {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      color: #7ee06a;
+      text-shadow: 2px 2px 0 #000;
+    }
+    .hud-top { position: absolute; top: 16px; left: 20px; }
+    .hud-title {
+      font-family: "Alagard", "DOS VGA", monospace;
+      font-size: 34px;
+      letter-spacing: 2px;
+      color: #b8e6a0;
+    }
+    .hud-sub, .hud-line, .hud-help {
+      font-family: "DOS VGA", monospace;
+      font-size: 16px;
+      margin-top: 6px;
+    }
+    .hud-help { color: #557a5a; }
+    .hud-prompt {
+      position: absolute;
+      left: 50%;
+      top: 62%;
+      transform: translateX(-50%);
+      font-family: "DOS VGA", monospace;
+      font-size: 20px;
+      color: #b8e6a0;
+      animation: pulse 1.6s ease-in-out infinite;
+    }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+  </style>
+</head>
+<body>
+  <div id="frame"><canvas id="game" width="480" height="270"></canvas></div>
+  <div id="hud"></div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

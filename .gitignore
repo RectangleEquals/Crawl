@@ -1,0 +1,24 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+*.tsbuildinfo
+
+# Tooling caches
+.vite/
+.turbo/
+coverage/
+
+# Local databases (Server runtime state — never commit saves)
+*.db
+*.db-wal
+*.db-shm
+
+# Editor/OS noise
+.DS_Store
+Thumbs.db
+*.log
+
+# AI Assistant settings
+.claude/

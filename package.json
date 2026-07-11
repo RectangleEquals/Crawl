@@ -1,0 +1,17 @@
+{
+  "name": "crawlstar",
+  "version": "0.1.0",
+  "private": true,
+  "description": "CrawlStar — browser-native co-op PSX-styled procedural metroidvania ARPG looter",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "pnpm@11.11.0",
+  "scripts": {
+    "dev": "pnpm --filter @crawlstar/client dev",
+    "build": "pnpm -r --if-present build",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "test": "pnpm -r --if-present test"
+  }
+}
