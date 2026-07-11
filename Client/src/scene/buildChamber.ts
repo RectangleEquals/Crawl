@@ -16,10 +16,18 @@ import {
 import { convertIndices, convertTriples, worldVecToRender } from "../render/space.js";
 import { psxify, toDataTexture } from "../render/psx/materials.js";
 
+export interface FlickerLight {
+  light: THREE.PointLight;
+  baseIntensity: number;
+  phase: number;
+}
+
 export interface BuiltChamber {
   scene: THREE.Scene;
   spawnPosition: THREE.Vector3;
   triangleCount: number;
+  keyLight: THREE.DirectionalLight;
+  flickerLights: FlickerLight[];
 }
 
 export function buildChamberScene(seed: string): BuiltChamber {
@@ -32,17 +40,18 @@ export function buildChamberScene(seed: string): BuiltChamber {
   scene.fog = new THREE.FogExp2(fogColor, style.fog.density);
   scene.background = fogColor;
 
-  const gloamRamp = rampRgb(style, "gloam");
-  const gloamBright = gloamRamp[gloamRamp.length - 1];
-  const shardColor = new THREE.Color(
-    (gloamBright?.r ?? 126) / 255,
-    (gloamBright?.g ?? 224) / 255,
-    (gloamBright?.b ?? 106) / 255,
-  );
+  const rampColor = (ramp: "gloam" | "accent"): THREE.Color => {
+    const steps = rampRgb(style, ramp);
+    const bright = steps[steps.length - 1];
+    return new THREE.Color((bright?.r ?? 255) / 255, (bright?.g ?? 255) / 255, (bright?.b ?? 255) / 255);
+  };
+  const shardColor = rampColor("gloam");
+  const emberColor = rampColor("accent");
 
   let triangleCount = 0;
   for (const meshData of chamber.meshes) {
-    const mesh = buildMesh(meshData, textures[meshData.texture], shardColor);
+    const emissiveColor = meshData.texture === "ember" ? emberColor : shardColor;
+    const mesh = buildMesh(meshData, textures[meshData.texture], emissiveColor);
     triangleCount += meshData.indices.length / 3;
     scene.add(mesh);
   }
@@ -77,24 +86,31 @@ export function buildChamberScene(seed: string): BuiltChamber {
   key.shadow.normalBias = 0.05;
   scene.add(key, key.target);
 
-  // gloam point lights at shard clusters
+  // placed point lights: gloam shards + flickering torches
+  const flickerLights: FlickerLight[] = [];
+  let phase = 0;
   for (const spec of chamber.pointLights) {
-    const light = new THREE.PointLight(shardColor, spec.intensity, spec.range, 2);
+    const light = new THREE.PointLight(rampColor(spec.ramp), spec.intensity, spec.range, 2);
     light.position.set(...worldVecToRender(spec.position));
     scene.add(light);
+    if (spec.flicker) {
+      flickerLights.push({ light, baseIntensity: spec.intensity, phase: (phase += 7.31) });
+    }
   }
 
   return {
     scene,
     spawnPosition: new THREE.Vector3(...worldVecToRender(chamber.spawn.position)),
     triangleCount,
+    keyLight: key,
+    flickerLights,
   };
 }
 
 function buildMesh(
   meshData: MeshData,
   texture: { width: number; height: number; data: Uint8ClampedArray },
-  shardColor: THREE.Color,
+  emissiveColor: THREE.Color,
 ): THREE.Mesh {
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute("position", new THREE.BufferAttribute(convertTriples(meshData.positions), 3));
@@ -107,7 +123,7 @@ function buildMesh(
   if (meshData.emissive) {
     material = new THREE.MeshPhongMaterial({
       map,
-      emissive: shardColor,
+      emissive: emissiveColor,
       emissiveMap: map,
       emissiveIntensity: 2.4,
       shininess: 40,

@@ -8,16 +8,18 @@ import { Rng } from "../math/rng.js";
 import { MeshBuilder, mergeMeshes, type MeshData, type Vec3 } from "./mesh.js";
 import {
   MODULE, WALL_H,
-  floorSlab, ceilingSlab, wallSegment, archSegment, column, dais, shardCluster, waterPlane,
+  floorSlab, ceilingSlab, wallSegment, archSegment, column, dais, shardCluster, torchSconce, waterPlane,
 } from "./kit.js";
 import type { BiomeStyle } from "./style.js";
 
 export interface PointLightSpec {
   position: Vec3;
   /** style ramp key providing the light color (brightest step). */
-  ramp: "gloam";
+  ramp: "gloam" | "accent";
   intensity: number;
   range: number;
+  /** Client renders a cosmetic fire-flicker on this light (Tier-3 analog). */
+  flicker?: boolean;
 }
 
 export interface ChamberData {
@@ -42,16 +44,41 @@ export function generateChamber(style: BiomeStyle, seed: number | string): Chamb
   const pillarB = new MeshBuilder("pillar");
   const trimB = new MeshBuilder("trim");
   const shardB = new MeshBuilder("shard", { emissive: true });
+  const emberB = new MeshBuilder("ember", { emissive: true });
   const waterB = new MeshBuilder("water", { translucent: true });
+
+  // Dark passage stub behind an arch: without it the opening shows raw void,
+  // which the fog/volumetrics render as a glowing slab. Unlit + fogged, it
+  // reads as "the way onward, into darkness".
+  const archPassage = (cx: number, side: "n" | "s"): void => {
+    const x0 = cx * MODULE;
+    const x1 = (cx + 1) * MODULE;
+    const depth = 2.4;
+    const yIn = side === "s" ? 0 : L * MODULE;
+    const yOut = side === "s" ? -depth : L * MODULE + depth;
+    const yLo = Math.min(yIn, yOut);
+    const yHi = Math.max(yIn, yOut);
+    // floor (top only), ceiling (bottom only), flanks, end cap
+    stoneWallB.box([x0, yLo, -0.2], [x1, yHi, 0], 0.5, { px: false, nx: false, py: false, ny: false, nz: false });
+    stoneWallB.box([x0, yLo, 2.5], [x1, yHi, 2.8], 0.5, { px: false, nx: false, py: false, ny: false, pz: false });
+    stoneWallB.box([x0, yLo, 0], [x0 + 0.3, yHi, 2.5], 0.5, { pz: false, nz: false });
+    stoneWallB.box([x1 - 0.3, yLo, 0], [x1, yHi, 2.5], 0.5, { pz: false, nz: false });
+    const capY: [number, number] = side === "s" ? [yOut, yOut + 0.3] : [yOut - 0.3, yOut];
+    stoneWallB.box([x0, capY[0], 0], [x1, capY[1], 2.5], 0.5, { pz: false, nz: false });
+  };
 
   // floor + perimeter walls
   floorSlab(floorB, 0, 0, W, L);
   for (let cx = 0; cx < W; cx++) {
     // south wall: arch at center, north wall: two arches
-    if (cx === Math.floor(W / 2)) archSegment(stoneWallB, trimB, cx, 0, "s");
-    else wallSegment(stoneWallB, cx, 0, "s");
-    if (cx === 1 || cx === W - 2) archSegment(stoneWallB, trimB, cx, L - 1, "n");
-    else wallSegment(stoneWallB, cx, L - 1, "n");
+    if (cx === Math.floor(W / 2)) {
+      archSegment(stoneWallB, trimB, cx, 0, "s");
+      archPassage(cx, "s");
+    } else wallSegment(stoneWallB, cx, 0, "s");
+    if (cx === 1 || cx === W - 2) {
+      archSegment(stoneWallB, trimB, cx, L - 1, "n");
+      archPassage(cx, "n");
+    } else wallSegment(stoneWallB, cx, L - 1, "n");
   }
   for (let cyc = 0; cyc < L; cyc++) {
     wallSegment(stoneWallB, 0, cyc, "w");
@@ -89,6 +116,15 @@ export function generateChamber(style: BiomeStyle, seed: number | string): Chamb
   ]);
   for (const s of sconces) shardCluster(shardB, s, rng.fork(`sconce-${s[0]}-${s[1]}`), 3);
 
+  // wall torches: warm counterpoint pooling along the nave (the "less
+  // ominous" dial — player lantern is client-side, these are placed)
+  const torchFlames: Vec3[] = [
+    torchSconce(trimB, emberB, 0, 3, "w"),
+    torchSconce(trimB, emberB, 0, 7, "w"),
+    torchSconce(trimB, emberB, W - 1, 3, "e"),
+    torchSconce(trimB, emberB, W - 1, 7, "e"),
+  ];
+
   // flood: still water across the whole nave floor; the dais rises out of it
   waterPlane(waterB, 0, 0, W, L, 0.14);
 
@@ -100,11 +136,18 @@ export function generateChamber(style: BiomeStyle, seed: number | string): Chamb
       intensity: 10,
       range: 8,
     })),
+    ...torchFlames.map((p): PointLightSpec => ({
+      position: [p[0], p[1], p[2] + 0.25],
+      ramp: "accent",
+      intensity: 9,
+      range: 10,
+      flicker: true,
+    })),
   ];
 
   return {
     meshes: mergeMeshes([
-      stoneWallB.data, floorB.data, pillarB.data, trimB.data, shardB.data, waterB.data,
+      stoneWallB.data, floorB.data, pillarB.data, trimB.data, shardB.data, emberB.data, waterB.data,
     ]),
     pointLights,
     // moonlight raking in steeply through the collapsed roof

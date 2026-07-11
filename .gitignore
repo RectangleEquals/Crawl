@@ -20,5 +20,6 @@ coverage/
 Thumbs.db
 *.log
 
-# AI Assistant settings
+# VS Code and AI Assistant settings
+.vscode/
 .claude/

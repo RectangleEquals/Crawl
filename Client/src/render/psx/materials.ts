@@ -15,6 +15,12 @@ export const snapResolution = new THREE.Vector2(480, 270);
 /** 1 = snap to full internal-res pixel grid (subtle); 0.5 = half-res (chunky wobble). */
 export const snapStrength = { value: 1.0 };
 
+/**
+ * 0 = fully perspective-correct (modern), 1 = fully affine (raw PSX swim).
+ * The sweet spot keeps the warble readable without textures crawling.
+ */
+export const affineStrength = { value: 0.45 };
+
 const VERT_HEADER = /* glsl */ `
 uniform vec2 uSnapRes;
 uniform float uSnapStrength;
@@ -41,6 +47,7 @@ const VERT_SNAP = /* glsl */ `
 `;
 
 const FRAG_HEADER = /* glsl */ `
+uniform float uAffineStrength;
 #ifdef USE_MAP
 varying vec3 vPsxAffine;
 #endif
@@ -49,7 +56,7 @@ varying vec3 vPsxAffine;
 const FRAG_MAP = /* glsl */ `
 #ifdef USE_MAP
 {
-  vec2 psxUv = vPsxAffine.xy / vPsxAffine.z;
+  vec2 psxUv = mix( vMapUv, vPsxAffine.xy / vPsxAffine.z, uAffineStrength );
   vec4 sampledDiffuseColor = texture2D( map, psxUv );
   diffuseColor *= sampledDiffuseColor;
 }
@@ -61,6 +68,7 @@ export function psxify<T extends THREE.Material>(material: T): T {
   material.onBeforeCompile = (shader) => {
     shader.uniforms["uSnapRes"] = { value: snapResolution };
     shader.uniforms["uSnapStrength"] = snapStrength;
+    shader.uniforms["uAffineStrength"] = affineStrength;
     shader.vertexShader = VERT_HEADER + shader.vertexShader.replace("#include <project_vertex>", VERT_SNAP);
     shader.fragmentShader = FRAG_HEADER + shader.fragmentShader.replace("#include <map_fragment>", FRAG_MAP);
   };

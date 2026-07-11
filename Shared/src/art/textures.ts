@@ -122,7 +122,17 @@ function water(style: BiomeStyle, seed: number): TextureData {
   });
 }
 
-export type KitTextureId = "stoneWall" | "stoneFloor" | "pillar" | "shard" | "trim" | "water";
+/** Torch ember: hot radial core in the accent ramp (emissive in the renderer). */
+function ember(style: BiomeStyle, seed: number): TextureData {
+  const accent = rampRgb(style, "accent");
+  return makeTexture("ember", (x, y) => {
+    const core = 1 - Math.min(1, Math.hypot(x - SIZE / 2, y - SIZE / 2) / (SIZE * 0.5));
+    const lick = fbm(x, y, 10, 2, seed + 47) * 0.3;
+    return rampSample(accent, 0.4 + core * 0.55 + lick);
+  });
+}
+
+export type KitTextureId = "stoneWall" | "stoneFloor" | "pillar" | "shard" | "trim" | "water" | "ember";
 
 /** Generate the biome's full kit texture set. */
 export function generateKitTextures(
@@ -137,5 +147,6 @@ export function generateKitTextures(
     shard: shard(style, seed + 4),
     trim: trim(style, seed + 5),
     water: water(style, seed + 6),
+    ember: ember(style, seed + 7),
   };
 }

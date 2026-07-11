@@ -24,11 +24,30 @@ export interface MeshData {
 
 export type Vec3 = readonly [number, number, number];
 
+function lerp3(a: Vec3, b: Vec3, t: number): Vec3 {
+  return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+}
+
+function dist3(a: Vec3, b: Vec3): number {
+  return Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
+}
+
 /** A mutable mesh under construction, one per texture/material bucket. */
 export class MeshBuilder {
   readonly data: MeshData;
 
-  constructor(texture: KitTextureId, flags?: { emissive?: boolean; translucent?: boolean }) {
+  /**
+   * Faces are auto-subdivided so no quad edge exceeds this length (meters).
+   * Affine texturing swims uncontrollably on big polygons — the PSX-era
+   * subdivision rule, enforced mechanically (Docs/01 §2.1).
+   */
+  readonly maxEdge: number;
+
+  constructor(
+    texture: KitTextureId,
+    flags?: { emissive?: boolean; translucent?: boolean; maxEdge?: number },
+  ) {
+    this.maxEdge = flags?.maxEdge ?? 1.25;
     this.data = {
       texture,
       positions: [],
@@ -41,10 +60,49 @@ export class MeshBuilder {
   }
 
   /**
-   * Push a quad (two triangles) from four corners in CCW order (front face),
-   * with a flat normal and per-corner uvs.
+   * Push a quad from four corners in CCW order (front face), with a flat
+   * normal and per-corner uvs. Subdivided into a bilinear grid so no edge
+   * exceeds `maxEdge` (exact for the planar quads the kit produces).
    */
   quad(a: Vec3, b: Vec3, c: Vec3, d: Vec3, normal: Vec3, uvs: readonly [number, number][]): void {
+    const ua = uvs[0] as readonly [number, number];
+    const ub = uvs[1] as readonly [number, number];
+    const uc = uvs[2] as readonly [number, number];
+    const ud = uvs[3] as readonly [number, number];
+    const nx = Math.max(1, Math.ceil(Math.max(dist3(a, b), dist3(d, c)) / this.maxEdge));
+    const ny = Math.max(1, Math.ceil(Math.max(dist3(a, d), dist3(b, c)) / this.maxEdge));
+    for (let iy = 0; iy < ny; iy++) {
+      for (let ix = 0; ix < nx; ix++) {
+        const t0 = ix / nx;
+        const t1 = (ix + 1) / nx;
+        const s0 = iy / ny;
+        const s1 = (iy + 1) / ny;
+        this.rawQuad(
+          this.bilerp(a, b, c, d, t0, s0), this.bilerp(a, b, c, d, t1, s0),
+          this.bilerp(a, b, c, d, t1, s1), this.bilerp(a, b, c, d, t0, s1),
+          normal,
+          [this.bilerpUv(ua, ub, uc, ud, t0, s0), this.bilerpUv(ua, ub, uc, ud, t1, s0),
+           this.bilerpUv(ua, ub, uc, ud, t1, s1), this.bilerpUv(ua, ub, uc, ud, t0, s1)],
+        );
+      }
+    }
+  }
+
+  private bilerp(a: Vec3, b: Vec3, c: Vec3, d: Vec3, t: number, s: number): Vec3 {
+    return lerp3(lerp3(a, b, t), lerp3(d, c, t), s);
+  }
+
+  private bilerpUv(
+    a: readonly [number, number], b: readonly [number, number],
+    c: readonly [number, number], d: readonly [number, number],
+    t: number, s: number,
+  ): [number, number] {
+    const top: [number, number] = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+    const bot: [number, number] = [d[0] + (c[0] - d[0]) * t, d[1] + (c[1] - d[1]) * t];
+    return [top[0] + (bot[0] - top[0]) * s, top[1] + (bot[1] - top[1]) * s];
+  }
+
+  private rawQuad(a: Vec3, b: Vec3, c: Vec3, d: Vec3, normal: Vec3, uvs: readonly [number, number][]): void {
     const base = this.data.positions.length / 3;
     for (const p of [a, b, c, d]) this.data.positions.push(p[0], p[1], p[2]);
     for (let i = 0; i < 4; i++) this.data.normals.push(normal[0], normal[1], normal[2]);

@@ -168,6 +168,35 @@ export function shardCluster(b: MeshBuilder, center: Vec3, rng: Rng, count = 5):
   }
 }
 
+/**
+ * Wall-mounted torch on a west/east wall cell: bronze bracket + ember head.
+ * Returns the flame position for the light spec (warm counterpoint to the
+ * gloam — the "less ominous" dial for populated areas).
+ */
+export function torchSconce(
+  trim: MeshBuilder,
+  emberB: MeshBuilder,
+  cx: number,
+  cy: number,
+  dir: "w" | "e",
+): Vec3 {
+  const wallT = 0.3;
+  const y = cy * MODULE + MODULE / 2;
+  const zBase = 1.55;
+  const inward = dir === "w" ? 1 : -1;
+  const xWall = dir === "w" ? cx * MODULE + wallT : (cx + 1) * MODULE - wallT;
+  const x0 = Math.min(xWall, xWall + inward * 0.22);
+  const x1 = Math.max(xWall, xWall + inward * 0.22);
+  // bracket arm + cup
+  trim.box([x0, y - 0.06, zBase], [x1, y + 0.06, zBase + 0.1], 1, {});
+  const cupX0 = Math.min(xWall + inward * 0.14, xWall + inward * 0.34);
+  const cupX1 = Math.max(xWall + inward * 0.14, xWall + inward * 0.34);
+  trim.box([cupX0, y - 0.1, zBase + 0.1], [cupX1, y + 0.1, zBase + 0.28], 1, { nz: false });
+  // ember head (emissive bucket)
+  emberB.box([cupX0 + 0.03, y - 0.07, zBase + 0.28], [cupX1 - 0.03, y + 0.07, zBase + 0.5], 2, { nz: false });
+  return [xWall + inward * 0.24, y, zBase + 0.55];
+}
+
 /** Still-water plane over [x0,y0]→[x1,y1] cells at `level` meters (per-cell quads — see floorSlab). */
 export function waterPlane(b: MeshBuilder, x0: number, y0: number, x1: number, y1: number, level: number): void {
   const u = UV * 0.25;
