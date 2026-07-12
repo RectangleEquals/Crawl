@@ -7,14 +7,23 @@
 import { GameHost } from "@crawlstar/shared";
 import { WsListener } from "./gateway.js";
 
+// Tuning knobs via env (for testing): CRAWLSTAR_BOTS=0 to fight solo,
+// CRAWLSTAR_ENEMIES=2 for a smaller pack, CRAWLSTAR_CD_SCALE=2 to halve enemy
+// attack frequency. Example: CRAWLSTAR_BOTS=0 CRAWLSTAR_CD_SCALE=2 pnpm dev:server
 const PORT = Number(process.env["CRAWLSTAR_PORT"] ?? 8787);
 const SEED = process.env["CRAWLSTAR_SEED"] ?? "m2-demo";
+const num = (key: string, def: number): number => {
+  const v = process.env[key];
+  return v !== undefined && v !== "" && !Number.isNaN(Number(v)) ? Number(v) : def;
+};
 
 await GameHost.ready();
 const listener = new WsListener(PORT);
 const host = new GameHost(listener, {
   seed: SEED,
-  botCount: 1,
+  botCount: num("CRAWLSTAR_BOTS", 1),
+  enemyCount: num("CRAWLSTAR_ENEMIES", 4),
+  cooldownScale: num("CRAWLSTAR_CD_SCALE", 1),
   log: (line) => console.log(`[crawlstar] ${line}`),
 });
 host.start();

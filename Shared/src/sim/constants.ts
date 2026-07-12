@@ -26,3 +26,24 @@ export const PLAYER_EYE = 1.55; // eye height above feet
 
 /** Max input commands the server accepts per wall-clock second (anti-speedhack, Docs/03 §3). */
 export const MAX_CMDS_PER_SECOND = TICK_RATE + 8;
+
+// ---- combat (M3, Docs/04 · Docs/08) ----
+/** Ticks of hitbox history for lag compensation (~250 ms). */
+export const HITBOX_HISTORY = 8;
+/** Movement multiplier while blocking (Warden brace). Input-derived → predicted. */
+export const BLOCK_SLOW = 0.4;
+/** Downed bleed-out window (Docs/09 §6; full gravemark loop is M5). */
+export const DOWNED_BLEEDOUT_TICKS = 60 * TICK_RATE;
+/** M3 placeholder: a downed player stands back up after this if not finished. */
+export const DOWN_RESPAWN_TICKS = 6 * TICK_RATE;
+/** Conduction chain: max neighbours and radius (Docs/04 §2). */
+export const CONDUCTION_RADIUS = 4.0;
+export const CONDUCTION_MAX_TARGETS = 3;
+export const CONDUCTION_DAMAGE = 10;
+/** Capsule half-height used as the hit-centre offset above feet. */
+export const HIT_CENTER_Z = PLAYER_HEIGHT / 2;
+/** Bulwark (Warden resource) gained per tick while blocking (Docs/04 §3.1). */
+export const BULWARK_PER_BLOCK_TICK = 0.7; // ~21/s → ~5 s to fill from blocking
+/** Bulwark gained when taking a hit (× damage dealt), or when blocking (× damage absorbed). */
+export const BULWARK_ON_HIT = 0.4;
+export const BULWARK_ON_BLOCKED_HIT = 0.6;

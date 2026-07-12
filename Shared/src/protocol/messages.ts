@@ -1,13 +1,16 @@
 /**
  * Protocol messages (Docs/03). The core invariant: clients send INPUTS ONLY —
- * no message exists that asserts state. Binary encode/decode per message.
+ * no message asserts state. Binary encode/decode per message.
+ * v3 (M3): combat buttons, per-entity combat fields, self combat block in
+ * Snapshot, and a per-tick CombatEvent list (juice channel, Docs/03 §3).
  */
 
 import { ByteReader, ByteWriter } from "./codec.js";
 import { POS_SCALE, VEL_SCALE, YAW_SCALE } from "../sim/constants.js";
+import { EventKind, type CombatEvent } from "../sim/combat/events.js";
 import type { Vec3 } from "../art/mesh.js";
 
-export const PROTOCOL_VERSION = 2;
+export const PROTOCOL_VERSION = 3;
 
 export enum MsgType {
   // client → server
@@ -28,19 +31,38 @@ export enum MsgType {
 
 // ---------------------------------------------------------------- inputs
 
-/** Button bitfield for one input command. */
+/** Button bitfield for one input command (fits u8). */
 export enum Buttons {
   Jump = 1 << 0,
   Sprint = 1 << 1,
   Interact = 1 << 2,
+  Attack = 1 << 3, // primary (repeats while held)
+  Block = 1 << 4, // held stance
+  Ability1 = 1 << 5, // edge-triggered
+  Ability2 = 1 << 6,
+  Ability3 = 1 << 7,
 }
 
 export interface InputCmd {
-  seq: number; // u32, monotonically increasing per client
-  moveX: number; // strafe, [-1, 1]
-  moveY: number; // forward, [-1, 1]
-  yaw: number; // radians, view yaw at command time
+  seq: number;
+  moveX: number;
+  moveY: number;
+  yaw: number;
   buttons: number;
+}
+
+/** Per-entity combat flags on the wire (EntityState.stateFlags). */
+export enum EntityFlag {
+  Downed = 1 << 0,
+  Blocking = 1 << 1,
+  Attacking = 1 << 2, // windup or active
+  Launched = 1 << 3,
+}
+
+/** Self combat flags (SnapshotMsg.selfFlags). */
+export enum SelfFlag {
+  Downed = 1 << 0,
+  Blocking = 1 << 1,
 }
 
 export interface HelloMsg { type: MsgType.Hello; version: number; name: string }
@@ -54,7 +76,6 @@ export interface AreaRef {
   areaId: number;
   name: string;
   seed: string;
-  /** generateChamber options, kept tiny & explicit for M2. */
   roofHoles: boolean;
   waterLevel: number;
 }
@@ -64,6 +85,10 @@ export interface EntityState {
   pos: Vec3;
   yaw: number;
   anim: number; // 0 idle, 1 walk, 2 air
+  kind: number; // archetype index (client maps → visual)
+  hpFrac: number; // 0..255
+  stateFlags: number; // EntityFlag bits
+  tagFlags: number; // TAG_BIT bits
 }
 
 export interface WelcomeMsg {
@@ -74,16 +99,29 @@ export interface WelcomeMsg {
   spawnYaw: number;
 }
 
+export interface ProjectileState {
+  id: number;
+  kind: number; // 0 shard, 1 cinder
+  pos: Vec3;
+}
+
 export interface SnapshotMsg {
   type: MsgType.Snapshot;
   tick: number;
-  /** seq of the last input command applied to YOUR character. */
   lastInputSeq: number;
-  /** authoritative state for you, for reconciliation. */
   selfPos: Vec3;
   selfVelZ: number;
   selfGrounded: boolean;
-  entities: EntityState[]; // everyone except you
+  selfHp: number;
+  selfMaxHp: number;
+  selfResource: number;
+  selfMaxResource: number;
+  selfFlags: number; // SelfFlag bits
+  selfTagFlags: number;
+  abilityReady: number; // bit per ability slot 0..3 (1 = off cooldown & affordable)
+  entities: EntityState[];
+  events: CombatEvent[];
+  projectiles: ProjectileState[];
 }
 
 export interface EntityJoinMsg { type: MsgType.EntityJoin; id: number; name: string; isBot: boolean }
@@ -99,34 +137,29 @@ export type ServerMsg =
   | TransitionBeginMsg | TransitionGoMsg | PingMsg | RejectMsg;
 export type AnyMsg = ClientMsg | ServerMsg;
 
-// ---------------------------------------------------------------- encode
+// ---------------------------------------------------------------- codec helpers
 
 function writeVec3Q(w: ByteWriter, v: Vec3): void {
-  w.i32(Math.round(v[0] * POS_SCALE));
-  w.i32(Math.round(v[1] * POS_SCALE));
-  w.i32(Math.round(v[2] * POS_SCALE));
+  w.i32(Math.round(v[0] * POS_SCALE)).i32(Math.round(v[1] * POS_SCALE)).i32(Math.round(v[2] * POS_SCALE));
 }
-
 function readVec3Q(r: ByteReader): Vec3 {
   return [r.i32() / POS_SCALE, r.i32() / POS_SCALE, r.i32() / POS_SCALE];
 }
-
 function writeYawQ(w: ByteWriter, yaw: number): void {
   const t = ((yaw % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
   w.u16(Math.round(t * YAW_SCALE) & 0xffff);
 }
-
 function readYawQ(r: ByteReader): number {
   return r.u16() / YAW_SCALE;
 }
-
 function writeAreaRef(w: ByteWriter, a: AreaRef): void {
   w.u16(a.areaId).str(a.name).str(a.seed).u8(a.roofHoles ? 1 : 0).f32(a.waterLevel);
 }
-
 function readAreaRef(r: ByteReader): AreaRef {
   return { areaId: r.u16(), name: r.str(), seed: r.str(), roofHoles: r.u8() === 1, waterLevel: r.f32() };
 }
+
+// ---------------------------------------------------------------- encode
 
 export function encode(msg: AnyMsg): Uint8Array {
   const w = new ByteWriter();
@@ -157,17 +190,28 @@ export function encode(msg: AnyMsg): Uint8Array {
       writeYawQ(w, msg.spawnYaw);
       break;
     case MsgType.Snapshot:
-      w.u32(msg.tick);
-      w.u32(msg.lastInputSeq);
+      w.u32(msg.tick).u32(msg.lastInputSeq);
       writeVec3Q(w, msg.selfPos);
-      w.i16(Math.round(msg.selfVelZ * VEL_SCALE));
-      w.u8(msg.selfGrounded ? 1 : 0);
+      w.i16(Math.round(msg.selfVelZ * VEL_SCALE)).u8(msg.selfGrounded ? 1 : 0);
+      w.u16(Math.max(0, Math.round(msg.selfHp))).u16(msg.selfMaxHp);
+      w.u16(Math.max(0, Math.round(msg.selfResource))).u16(msg.selfMaxResource);
+      w.u8(msg.selfFlags).u8(msg.selfTagFlags).u8(msg.abilityReady);
       w.u8(msg.entities.length);
       for (const e of msg.entities) {
         w.u16(e.id);
         writeVec3Q(w, e.pos);
         writeYawQ(w, e.yaw);
-        w.u8(e.anim);
+        w.u8(e.anim).u8(e.kind).u8(e.hpFrac).u8(e.stateFlags).u8(e.tagFlags);
+      }
+      w.u8(msg.events.length);
+      for (const ev of msg.events) {
+        w.u8(ev.kind).u16(ev.entity).i16(Math.max(-32768, Math.min(32767, Math.round(ev.value))));
+        writeVec3Q(w, ev.pos);
+      }
+      w.u8(msg.projectiles.length);
+      for (const p of msg.projectiles) {
+        w.u16(p.id).u8(p.kind);
+        writeVec3Q(w, p.pos);
       }
       break;
     case MsgType.EntityJoin:
@@ -203,13 +247,7 @@ export function decode(data: Uint8Array): AnyMsg {
       const n = r.u8();
       const cmds: InputCmd[] = [];
       for (let i = 0; i < n; i++) {
-        cmds.push({
-          seq: r.u32(),
-          moveX: r.i16() / 1000,
-          moveY: r.i16() / 1000,
-          yaw: readYawQ(r),
-          buttons: r.u8(),
-        });
+        cmds.push({ seq: r.u32(), moveX: r.i16() / 1000, moveY: r.i16() / 1000, yaw: readYawQ(r), buttons: r.u8() });
       }
       return { type, cmds };
     }
@@ -225,12 +263,36 @@ export function decode(data: Uint8Array): AnyMsg {
       const selfPos = readVec3Q(r);
       const selfVelZ = r.i16() / VEL_SCALE;
       const selfGrounded = r.u8() === 1;
-      const n = r.u8();
+      const selfHp = r.u16();
+      const selfMaxHp = r.u16();
+      const selfResource = r.u16();
+      const selfMaxResource = r.u16();
+      const selfFlags = r.u8();
+      const selfTagFlags = r.u8();
+      const abilityReady = r.u8();
+      const nE = r.u8();
       const entities: EntityState[] = [];
-      for (let i = 0; i < n; i++) {
-        entities.push({ id: r.u16(), pos: readVec3Q(r), yaw: readYawQ(r), anim: r.u8() });
+      for (let i = 0; i < nE; i++) {
+        entities.push({
+          id: r.u16(), pos: readVec3Q(r), yaw: readYawQ(r),
+          anim: r.u8(), kind: r.u8(), hpFrac: r.u8(), stateFlags: r.u8(), tagFlags: r.u8(),
+        });
       }
-      return { type, tick, lastInputSeq, selfPos, selfVelZ, selfGrounded, entities };
+      const nEv = r.u8();
+      const events: CombatEvent[] = [];
+      for (let i = 0; i < nEv; i++) {
+        events.push({ kind: r.u8() as EventKind, entity: r.u16(), value: r.i16(), pos: readVec3Q(r) });
+      }
+      const nP = r.u8();
+      const projectiles: ProjectileState[] = [];
+      for (let i = 0; i < nP; i++) {
+        projectiles.push({ id: r.u16(), kind: r.u8(), pos: readVec3Q(r) });
+      }
+      return {
+        type, tick, lastInputSeq, selfPos, selfVelZ, selfGrounded,
+        selfHp, selfMaxHp, selfResource, selfMaxResource, selfFlags, selfTagFlags, abilityReady,
+        entities, events, projectiles,
+      };
     }
     case MsgType.EntityJoin:
       return { type, id: r.u16(), name: r.str(), isBot: r.u8() === 1 };

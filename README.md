@@ -37,6 +37,18 @@ URL parameters: `?mode=solo|online` · `?name=YourName` · `?rtt=150` (simulated
 `?touch=1` (force the virtual gamepad) · `?lowfx=1` (skip volumetrics — headless/perf testing) ·
 `?server=ws://host:8787` (explicit server).
 
+**Combat tuning knobs** (great for testing abilities in isolation):
+- **Solo** (`pnpm dev`, integrated worker): `?bots=0` (fight without an ally) · `?enemies=2` (smaller
+  pack) · `?cdscale=3` (enemies/allies attack 3× less often). E.g.
+  `http://localhost:5173/?mode=solo&bots=0&enemies=2&cdscale=3`.
+- **Online** (`pnpm dev:online`): the same knobs as server env vars —
+  `CRAWLSTAR_BOTS=0 CRAWLSTAR_ENEMIES=2 CRAWLSTAR_CD_SCALE=3 pnpm dev:server` (then run `pnpm dev`
+  separately, or set them before `pnpm dev:online`).
+
+**Warden combat:** LMB strike · RMB block (builds Bulwark + mitigates frontal hits) · Q ward wall ·
+E shield-slam (applies Launch) · F ground-slam (consumes Launch for bonus AoE). Bulwark also builds
+from taking hits — block a big swing to charge fast, then spend it on abilities.
+
 **Controls:** click to capture the mouse — **WASD** move · **Space** jump · **Shift** sprint ·
 **V** first/third person · **1/2/3** internal resolution · **Esc** release. Gamepads (Xbox layout)
 hot-swap automatically: left stick move, right stick look, **A** jump, **LB/L3** sprint, **Y** camera.

@@ -13,6 +13,11 @@ export interface FrameInput {
   moveY: number; // forward [-1,1]
   jump: boolean;
   sprint: boolean;
+  attack: boolean; // primary (held)
+  block: boolean; // brace (held)
+  ability1: boolean; // Ward Wall
+  ability2: boolean; // Shield Slam (Launch)
+  ability3: boolean; // Ground Slam
   /** mouse look delta (pixels) since last sample */
   lookDX: number;
   lookDY: number;
@@ -37,6 +42,7 @@ export class InputSystem {
   readonly touch: TouchControls;
 
   private readonly keys = new Set<string>();
+  private readonly mouseButtons = new Set<number>();
   private mouseDX = 0;
   private mouseDY = 0;
   private cameraTogglePending = false;
@@ -74,8 +80,18 @@ export class InputSystem {
       this.setDevice("kbm");
     });
     window.addEventListener("keyup", (e) => this.keys.delete(e.code));
-    window.addEventListener("blur", () => this.keys.clear());
+    window.addEventListener("blur", () => {
+      this.keys.clear();
+      this.mouseButtons.clear();
+    });
     window.addEventListener("gamepadconnected", () => this.setDevice("pad"));
+    // combat mouse buttons (fire during pointer lock); suppress the context menu
+    window.addEventListener("mousedown", (e) => {
+      this.mouseButtons.add(e.button);
+      this.setDevice("kbm");
+    });
+    window.addEventListener("mouseup", (e) => this.mouseButtons.delete(e.button));
+    element.addEventListener("contextmenu", (e) => e.preventDefault());
   }
 
   get pointerLocked(): boolean {
@@ -109,6 +125,11 @@ export class InputSystem {
     if (this.keys.has("KeyA")) moveX -= 1;
     let jump = this.keys.has("Space");
     let sprint = this.keys.has("ShiftLeft") || this.keys.has("ShiftRight");
+    let attack = this.mouseButtons.has(0);
+    let block = this.mouseButtons.has(2);
+    let ability1 = this.keys.has("KeyQ");
+    let ability2 = this.keys.has("KeyE");
+    let ability3 = this.keys.has("KeyF");
 
     let padLookX = 0;
     let padLookY = 0;
@@ -122,11 +143,18 @@ export class InputSystem {
       padLookX = rx;
       padLookY = ry;
       const btn = (i: number): boolean => (pad.buttons[i]?.pressed ?? false);
+      const axisTrigger = (i: number): boolean => (pad.buttons[i]?.value ?? 0) > 0.4;
       if (btn(0)) {
         jump = true;
         this.setDevice("pad");
       }
-      if (btn(4) || btn(10)) sprint = true;
+      if (btn(10)) sprint = true; // L3
+      if (axisTrigger(7)) attack = true; // RT
+      if (axisTrigger(6)) block = true; // LT
+      if (btn(2)) ability1 = true; // X
+      if (btn(5)) ability2 = true; // RB
+      if (btn(13)) ability3 = true; // D-pad down
+      if (attack || block || ability1 || ability2 || ability3) this.setDevice("pad");
       // edge-detect Y (3) for camera toggle
       if (btn(3) && !this.padCameraHeld) this.cameraTogglePending = true;
       this.padCameraHeld = btn(3);
@@ -151,6 +179,11 @@ export class InputSystem {
       moveY: Math.max(-1, Math.min(1, moveY)),
       jump,
       sprint,
+      attack,
+      block,
+      ability1,
+      ability2,
+      ability3,
       lookDX,
       lookDY,
       padLookX,

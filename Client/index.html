@@ -79,6 +79,71 @@
     }
     @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
 
+    /* combat HUD (bottom-centre) */
+    .hud-combat {
+      position: fixed;
+      left: 50%;
+      bottom: 18px;
+      transform: translateX(-50%);
+      width: 360px;
+      pointer-events: none;
+      font-family: "DOS VGA", monospace;
+    }
+    .cbar {
+      position: relative;
+      height: 18px;
+      background: rgba(10, 12, 16, 0.7);
+      border: 2px solid #2a3140;
+      margin-top: 4px;
+    }
+    .cbar.bulwark { height: 10px; }
+    .cbar-fill { position: absolute; left: 0; top: 0; bottom: 0; width: 100%; transition: width 0.12s linear; }
+    .cbar-fill.hp { background: #8be06a; }
+    .cbar-fill.res { background: #5a9ad8; }
+    .cbar-text {
+      position: absolute; inset: 0;
+      text-align: center; font-size: 13px; color: #eaf2e0;
+      text-shadow: 1px 1px 0 #000; line-height: 18px;
+    }
+    .hud-abilities { display: flex; gap: 6px; margin-top: 6px; justify-content: center; }
+    .ability {
+      flex: 1;
+      border: 2px solid #2a3140;
+      background: rgba(10, 12, 16, 0.7);
+      padding: 3px 2px;
+      text-align: center;
+      color: #55607a;
+      font-size: 11px;
+      opacity: 0.6;
+    }
+    .ability.ready { color: #b8e6a0; border-color: #4a6a3a; opacity: 1; }
+    .ability-key { display: block; font-size: 13px; color: #9ab8d8; }
+    .ability.ready .ability-key { color: #cfe6b0; }
+
+    .hud-downed {
+      position: fixed;
+      left: 50%; top: 40%;
+      transform: translateX(-50%);
+      display: none;
+      font-family: "Alagard", "DOS VGA", monospace;
+      font-size: 40px;
+      color: #e0603a;
+      text-shadow: 3px 3px 0 #000;
+      pointer-events: none;
+    }
+
+    /* floating damage numbers */
+    .fx-numbers { position: fixed; inset: 0; pointer-events: none; z-index: 45; }
+    .fx-num {
+      position: absolute;
+      transform: translate(-50%, -50%);
+      font-family: "DOS VGA", monospace;
+      font-size: 20px;
+      font-weight: bold;
+      text-shadow: 2px 2px 0 #000;
+      white-space: nowrap;
+    }
+
     /* virtual gamepad (touch) */
     #touch-controls { position: fixed; inset: 0; pointer-events: none; z-index: 40; }
     .tc-stick {

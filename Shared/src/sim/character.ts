@@ -8,7 +8,7 @@ import { Buttons, type InputCmd } from "../protocol/messages.js";
 import type { Vec3 } from "../art/mesh.js";
 import { yawBasis } from "../math/trig.js";
 import {
-  GRAVITY, JUMP_VELOCITY, SPRINT_SPEED, TICK_DT, WALK_SPEED,
+  BLOCK_SLOW, GRAVITY, JUMP_VELOCITY, SPRINT_SPEED, TICK_DT, WALK_SPEED,
 } from "./constants.js";
 import type { CharacterBody } from "./physics.js";
 
@@ -20,12 +20,18 @@ export interface CharState {
 
 export type AnimState = 0 | 1 | 2; // idle | walk | air
 
-/** Advance one tick of movement. Mutates `state`; moves `body`. */
+/**
+ * Advance one tick of movement. Mutates `state`; moves `body`.
+ * `speedMult` folds in server-only slows (tags) — block-slow is derived from
+ * the Block button here so BOTH client prediction and server agree on it
+ * (input-derived → no reconciliation divergence). The client passes 1.
+ */
 export function stepCharacter(
   body: CharacterBody,
   state: CharState,
   cmd: InputCmd,
   immediate: boolean,
+  speedMult = 1,
 ): void {
   const basis = yawBasis(cmd.yaw);
   let dx = cmd.moveX * basis.rx + cmd.moveY * basis.fx;
@@ -35,7 +41,8 @@ export function stepCharacter(
     dx /= len;
     dy /= len;
   }
-  const speed = (cmd.buttons & Buttons.Sprint) !== 0 ? SPRINT_SPEED : WALK_SPEED;
+  const blockMult = (cmd.buttons & Buttons.Block) !== 0 ? BLOCK_SLOW : 1;
+  const speed = ((cmd.buttons & Buttons.Sprint) !== 0 ? SPRINT_SPEED : WALK_SPEED) * blockMult * speedMult;
 
   // vertical: gamey full-control air model for M2 (momentum model is M3+).
   // Only treat "grounded" as authoritative while NOT ascending — the
