@@ -56,8 +56,12 @@ Node-only API (injected interfaces for time/storage), and no floating-point nond
 
 ## 4. Simulation Core (Shared/sim)
 
-- **ECS:** dense typed-array component stores keyed by entity id; systems run in a fixed order each tick.
-  Written renderer-free so the same code runs on server, Web Worker, and in client prediction.
+- **Entity model (as built, M2–M3):** a per-island `Map<id, entity>` of plain objects (`IslandEntity` with
+  nested `state`/`combat`/`tags`/`cooldowns`); **systems run in a fixed order each tick**. It is *not* yet a
+  data-oriented ECS — no Struct-of-Arrays / typed-array component stores, archetype chunks, sparse-sets, or
+  pooling. This is deliberate: it's correct, readable, and fast enough at current scale. **SoA + pooling is a
+  deferred optimization** (§4.3), not a claim about today. Written renderer-free so the same code runs on
+  server, Web Worker, and in client prediction.
 - **Fixed tick:** simulation advances at **30 Hz** (`TICK_MS = 33.33`). Rendering interpolates between the
   last two known states; client input is sampled per frame and quantized to ticks.
 - **Determinism level:** *replayable-deterministic* — same inputs + same seed ⇒ same outcomes on the same
@@ -111,6 +115,49 @@ Node is event-driven by nature; the design leans into it rather than fighting it
 - **Client side:** render thread never simulates the world — the integrated server is already a Web
   Worker ([§5](#5-three-deployment-shapes-one-sim)), so a same-PC host pays for sim+physics on a separate
   core from rendering.
+
+### 4.3 Scaling posture & when to optimize
+
+**Target = concurrent, co-located, simultaneously-simulated-and-visible entities in a single encounter** (the
+worst case is a **boss arena where add-swarms can genuinely overwhelm the party** — that's the design intent,
+not sparse rooms). Aspire to **hundreds on screen at once**; **~50 concurrent of each** (enemies /
+projectiles / effects) is the acceptable **lower bound** if the browser ceiling proves lower. This is *not* a
+per-area or per-"floor" spread: an area/floor may hold far more entities *spatially* (spread across many
+rooms, only some active near players) — the budget that matters is how many are live and near the camera
+**together**. Effects are mostly **client-side cosmetic** (Tier-1/3 split, §4.1), so the *server* budget is
+dominated by enemies + projectiles + their physics.
+
+**Numbers are guesswork until the generator exists.** M3 has only two identical single-room areas (no
+procedural stitching yet); real per-area/room densities and how many rooms a floor/area spans get set once
+the Reach Director (M4+) stitches multi-room areas and the stress tests below run. Treat all counts here as
+placeholders to be measured, not literal targets.
+
+**Don't pre-optimize.** The current model handles M2–M9's designed densities (Docs/08 §5: packs of ~2–15).
+Optimize only when a **stress test** shows a real ceiling, and attack costs in this order (memory layout is
+NOT first in a GC'd sim):
+
+1. **O(n²) hot loops** — `stepProjectiles` (projectiles × entities), `applyHasteAuras` (entities²), AI
+   `nearestTarget` (entities² across AI), hitbox `meleeArc`/`radius` scans. Fix with **spatial partitioning**
+   (uniform grid / hash) over `AreaIsland`, not SoA.
+2. **Per-tick allocations / GC churn** — the per-entity `AbilityContext` (with closures) rebuilt each tick in
+   `area.ts`, `recordHistory`'s fresh sample array, bot `InputCmd`s, snapshot spreads. Reuse/pool these.
+3. **Snapshot bandwidth** — ~21 B × area entities × 30 Hz per client. Add **interest management / delta
+   culling** ([03](03-networking.md) §3).
+4. **Rapier body count** — hundreds of kinematic bodies is heavy regardless of ECS; consider cheaper
+   collision for far/again-Sanctum entities. (Projectiles are already sim-marched, not Rapier — keep that.)
+5. **Only then** consider **SoA typed-array component stores** (positions/tags/cooldowns) + a **sparse-set**
+   entity container, if GC is still the bottleneck.
+
+**Where/when to stress test** (use the bot soak harness, [07](07-procgen.md) §8, [08](08-enemies-bosses.md) §7):
+- **M6–M7** (first true horde densities + boss add-waves): a headless soak spawning escalating enemy +
+  projectile counts in one island, asserting the 30 Hz tick stays within budget (≤ ~20 ms/tick server-side)
+  and no runaway GC. This is the earliest point the O(n²) loops could bite.
+- **M8** (nightly bot-soak CI + the connection cap, [03](03-networking.md) §8): add a **max-density scenario**
+  to the nightly run (target-ceiling enemies/projectiles + a full 16-connection server) and record tick
+  time, allocation rate, and snapshot bytes/client as tracked telemetry — this sets the *real* per-region
+  entity ceiling and validates the ~50-each floor.
+- Re-run whenever a new class/enemy/effect adds a per-tick scan. See `.claude/BACKLOG.md` (Performance &
+  scaling) and `.claude/guide/verification.md` for the harness recipe.
 
 ## 5. Three Deployment Shapes, One Sim
 

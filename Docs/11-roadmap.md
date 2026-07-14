@@ -72,13 +72,24 @@ generation; boss rewards + first-kill passive points; Meridian Peddler with cour
 Reach index.
 **Accept:** Sanctum → Omens → 5 areas → composed boss → Sanctum, repeatable for 3 Reaches, with banking
 tension demonstrably shaping player behavior (telemetry: courier use, gravemark losses).
+**Stress test (first entity-density checkpoint — [02](02-tech-architecture.md) §4.3):** headless soak
+spawning escalating enemy + projectile counts in one island (boss add-waves are the first true horde);
+assert 30 Hz tick stays ≤ ~20 ms server-side with no runaway GC. This is the earliest point the O(n²) combat
+loops could bite — if they do, add spatial partitioning + kill per-tick allocations before piling on content.
 
 ## M8 — The Full Company
 Shade, Artificer, Chorister; revive keystones (Threnody, Deathgrudge) + one revive Singular; bot personas
-for all six classes + party-fill recommender; public/private lobbies, mid-run join, global chat; soak-test
-harness in CI (nightly full-expedition bot runs — [07](07-procgen.md) §8).
+for all six classes + party-fill recommender; public/private lobbies (regional service, [Multiplayer/](Multiplayer/README.md)),
+non-party visitors + party voting + chat channels ([09](09-modes-social.md) §9–11), mid-run join, connection
+cap ([03](03-networking.md) §8); soak-test harness in CI (nightly full-expedition bot runs — [07](07-procgen.md) §8).
 **Accept:** 5-player mixed human/bot party completes 5 Reaches; nightly soak is green a week straight;
 solo-with-bots session quality holds up per pillar 4 playtesting.
+**Stress test (sets the real entity ceiling — [02](02-tech-architecture.md) §4.3):** add a **max-density
+single-encounter** scenario to the nightly soak (a boss-arena add-swarm: as many concurrent, co-located
+enemies/projectiles/effects as possible + a **full 16-connection** server) and record tick time, allocation
+rate, and snapshot bytes/client as tracked telemetry. This validates (or lowers) the concurrency target —
+aspire to **hundreds on screen at once**, **~50 concurrent of each as the acceptable lower bound** — and
+sets the per-region connection cap ([03](03-networking.md) §8).
 
 ## M9 — Vertical Slice
 Content fill to 6 biomes / 8 boss archetypes / all 11 locks + Instruments; remaining tags and currencies;
