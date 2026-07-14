@@ -26,11 +26,17 @@ Related: [02-tech-architecture.md](02-tech-architecture.md) §5 (deployment shap
 ```sql
 accounts        (id, email, auth_hash, created_at, settings_json)
 characters      (id, account_id, league_id, class, hardcore, level, xp, xp_debt,
+                 realm,                  -- official | unofficial (never crosses; Multiplayer/architecture §6)
                  passives_json,          -- allocated nodes + sealed/active Gate
                  paperdoll_json,         -- equipped item ids by slot
-                 status,                 -- active | legacy(hardcore death) | migrated
+                 status,                 -- active | sleeping | legacy(hardcore death) | migrated
                  expedition_id NULL,     -- current world, if any
+                 last_event_version,     -- monotonic; anti-dupe for game→regional write-back (§4)
                  created_at, played_ms)
+reservations    (expedition_id, character_id, account_id, seat_index,
+                 state,                  -- awake | sleeping
+                 reserved_until,         -- epoch; NULL once released (character taken elsewhere)
+                 PRIMARY KEY (expedition_id, character_id))  -- seat reservation & awake/sleeping tally (§4, 09 §12)
 items           (id, owner_type,        -- character | stash | party_chest | courier | gravemark | trade
                  owner_id, base_id, rarity, affixes_json, sockets_json,
                  irradiated, seal_state, created_at)
@@ -74,17 +80,40 @@ obelisk_offers  (sanctum_id, offer_json, rolled_at)                    -- determ
 
 ## 4. Save Semantics
 
-- **Checkpoint events** (transactional, WAL): Sanctum arrival · **sleep** (party save & quit — parks the
-  expedition, [09](09-modes-social.md) §4) · area transitions (position + carried-inventory snapshot) ·
-  gravemark creation/recovery · Obelisk confirmation (Omens + generation outputs) · trades and courier
-  transfers (atomic across `meta.db`).
-- **Mid-area crash/disconnect recovery:** restore to the last area-entry snapshot; loot picked up since is
-  re-droppable from the area's deterministic records (no dupes: item ids are seeded by
-  location — [02](02-tech-architecture.md) §4).
+- **Durable-by-default — commit the instant it happens (user-mandated, [09](09-modes-social.md) §12).**
+  Every change to **character progression, inventories, world progression, or gravemarks** is written to the
+  durable store **at the moment of the event**, transactionally — never deferred to sleep. For **official**
+  realms the durable owner is the **regional** `meta.db` (write-back on each such event, [09](09-modes-social.md) §12);
+  for **community/offline** realms it is the **game server's** own DB. A disconnect, crash, or forced
+  rollback must **never** erase work a player just banked, and must not be exploitable (e.g. a private-server
+  operator forcing a rollback to undo an unwanted outcome). Write-back is idempotent (§4 note) so retries
+  can't dupe.
+- **Checkpoint / flush events** (transactional, WAL): item pickups, bank/stash/trade/courier moves, XP &
+  level & passive changes, gadget grants, Obelisk confirmations, gravemark creation/recovery, area
+  transitions (position + carried-inventory snapshot), boss kills / Sanctum unlocks — each commits as it
+  occurs. **Sleep** is a *full-state flush + party park + seat reservation* (§Seats below), a secondary
+  guarantee on top of the continuous writes, not the primary save.
+- **Mid-area crash/disconnect recovery:** restore to the last committed state (which, with continuous
+  write-back, is essentially "moments ago"); loot picked up but not yet in a container is re-droppable from
+  the area's deterministic records (no dupes: item ids are seeded by location — [02](02-tech-architecture.md) §4).
 - **Resume:** wakes the expedition file, restores party at their checkpoint Sanctum (or area snapshot),
   re-offers the same Obelisk hand (`obelisk_offers`), rehydrates gravemarks and remembered locks.
-- **Durability posture:** WAL + checkpoint-on-event; periodic `world` file snapshots; `meta.db` nightly
-  backup. Good enough for a small hosted cluster; replication is out of scope until scale demands it.
+- **Write-back integrity:** game→regional progression writes carry a monotonic per-character version /
+  event id so the regional service applies each once (anti-dupe/anti-rollback). Conflicts resolve to the
+  highest committed version.
+
+### Seats & reservations (sleeping) — [09](09-modes-social.md) §12
+
+- **On sleep,** each party member's seat in that world is reserved (`reservations.reserved_until = now +
+  window`, default ~7 days) and their character marked `sleeping`. Reserved seats still count toward the
+  server's player total ([Multiplayer/rest-api.md](Multiplayer/rest-api.md) `GET /api/servers`), and the
+  server browser tooltip splits **awake vs sleeping** from these rows.
+- **Taking a reserved character into a different server** clears that reservation (`reserved_until = NULL`,
+  seat freed) after a client warning; the character's **personal stash/inventory/gravemarks on the old world
+  remain owned/reserved**, but become **inaccessible while that world is at full seats** during the absence,
+  and recover when a seat frees.
+- **Durability posture:** WAL + commit-on-event; periodic `world` file snapshots; `meta.db` nightly backup;
+  replication out of scope until scale demands it.
 
 ## 5. World Lifecycle
 

@@ -6,6 +6,7 @@
 
 import { GameHost } from "@crawlstar/shared";
 import { WsListener } from "./gateway.js";
+import { startGameRest } from "./rest.js";
 
 // Tuning knobs via env (for testing): CRAWLSTAR_BOTS=0 to fight solo,
 // CRAWLSTAR_ENEMIES=2 for a smaller pack, CRAWLSTAR_CD_SCALE=2 to halve enemy
@@ -16,6 +17,7 @@ const num = (key: string, def: number): number => {
   const v = process.env[key];
   return v !== undefined && v !== "" && !Number.isNaN(Number(v)) ? Number(v) : def;
 };
+const REST_PORT = num("CRAWLSTAR_REST_PORT", PORT + 1); // read-only REST beside the ws port
 
 await GameHost.ready();
 const listener = new WsListener(PORT);
@@ -27,11 +29,13 @@ const host = new GameHost(listener, {
   log: (line) => console.log(`[crawlstar] ${line}`),
 });
 host.start();
+const rest = startGameRest(host, REST_PORT, (line) => console.log(`[crawlstar] ${line}`));
 console.log(`[crawlstar] headless server listening on ws://localhost:${PORT} (seed '${SEED}')`);
 
 process.on("SIGINT", () => {
   console.log("[crawlstar] shutting down");
   host.stop();
   listener.wss.close();
+  rest.close();
   process.exit(0);
 });

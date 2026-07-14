@@ -102,6 +102,12 @@ Every criterion from the original brief and subsequent design feedback, mapped t
 | F18 | User-provided fonts (Perfect DOS VGA 437, Liberation Sans) adopted; further font suggestions | [01](01-art-direction.md) §3; files in `Client/assets/fonts/` |
 | F19 | Full headless physics engine (server-authoritative, prediction/reconciliation; explosions, tether ropes, ragdolls) instead of custom kinematics | [02](02-tech-architecture.md) §4.1 (Rapier, three tiers), [03](03-networking.md) §4 |
 | F20 | Event-driven concurrency: sim never blocks on disk; persistence on a worker thread | [02](02-tech-architecture.md) §4.2, [10](10-persistence.md) §1 |
+| F21 | Two-tier server (regional directory + game-service instances) PoE/MMO-style; login→region→server-browser flow; official/community realms; read-only REST data plane | [Multiplayer/](Multiplayer/README.md) (architecture, rest-api, deployment, phases) |
+| F22 | Durable-by-default write-back: progression/inventory/world/gravemark committed the instant it happens (regional for official, else game DB), not just at sleep; idempotent, anti-rollback/anti-exploit | [10](10-persistence.md) §4, [09](09-modes-social.md) §12 |
+| F23 | Sleeping = full flush + safe co-op exit + seat reservation (~7 days); server browser tooltip awake-vs-sleeping; warning + rules on taking a reserved character elsewhere | [09](09-modes-social.md) §4, §12, [10](10-persistence.md) §4 (Seats) |
+| F24 | Non-party visitors: spawn in newest Sanctum, view-only stashes, Sanctum-confined, spectate, auto-advance on boss kill, party-vote governance (accept/kick/timeout/ban, leader=2, 60 s, cascade) | [09](09-modes-social.md) §9, §10 |
+| F25 | Chat channels: `#` global · `$` trade (Sanctum-only) · `>` world (game-server-wide) · `%` party · `@account` private (region-wide) | [09](09-modes-social.md) §11, [Multiplayer/architecture.md](Multiplayer/architecture.md) §4 |
+| F26 | Game-server connection cap (~16: party ≤5 + ~11–15 visitors), figurative pending load testing; all connections in the authoritative physics sim | [03](03-networking.md) §8, [09](09-modes-social.md) §12 |
 
 ---
 

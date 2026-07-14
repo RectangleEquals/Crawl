@@ -97,8 +97,12 @@ Generation is **client-requested, server-executed, streamed back** (user-mandate
 - **Handshake:** version check → account auth (token) → character select → resume or create expedition.
 - **Party lifecycle:** create (private/public) → invite/join (Sanctum lobby) → embark. Mid-run joins attach
   at the last Sanctum checkpoint; a joiner walks/waygates forward to the party.
-- **Sleep (save & quit):** party votes at a Sanctum; server checkpoints expedition + characters
-  ([10](10-persistence.md) §4) and parks the expedition. Resume restores party, area states, and gravemarks.
+- **Non-party visitors:** a client connecting to a world with an active party (not pre-accepted) is admitted
+  as a **Sanctum-confined visitor** ([09](09-modes-social.md) §9), simulated but movement-restricted to the
+  current Sanctum, subject to the capacity cap (§8) and party governance ([09](09-modes-social.md) §10).
+- **Sleep (save & quit):** party votes at a Sanctum; server flushes full state + reserves seats
+  ([10](10-persistence.md) §4 Seats) and parks the expedition. Continuous write-back means progress was
+  already durable ([09](09-modes-social.md) §12); resume restores party, area states, and gravemarks.
 - **Disconnects:** grace window (60 s) with the character server-simulated as safely idle (bots can cover,
   [09](09-modes-social.md) §3); reconnect resumes the session mid-area. Past the window, the character is
   parked at the last Sanctum checkpoint.
@@ -119,6 +123,20 @@ Generation is **client-requested, server-executed, streamed back** (user-mandate
 - Singleplayer integrated-server runs the same validation (cheating yourself offline is shrug-tier, but
   code parity is free); ladder-eligible play ([09](09-modes-social.md) §8, seasonal) requires hosted
   servers.
+
+## 8. Connection Capacity
+
+- A game service (one world) admits **the party (≤5) + non-party visitors, ~16 simultaneous connections
+  max** — a **starting figure** ([09](09-modes-social.md) §12), so up to ~11–15 visitors depending on party
+  size. Beyond the cap, new joiners are refused (or queued) with a "server full" reject.
+- The cap is a **real cost**, not just a lobby limit: every connection — **including Sanctum-confined
+  visitors** — is part of the authoritative 30 Hz simulation (physics included, [02](02-tech-architecture.md) §4.1),
+  so more connections means more per-tick work. Visitors are cheaper (one static Sanctum island, no field
+  simulation) but not free.
+- The number is expected to be **tuned per region/host after load testing** and may differ by server
+  location and player distribution; **16** is the initial conservative pick for a browser client (32 judged
+  likely too high). Enforced server-side; the regional server browser shows `players/max`
+  ([Multiplayer/rest-api.md](Multiplayer/rest-api.md)).
 
 ---
 

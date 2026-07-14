@@ -12,7 +12,7 @@ export type { Transport, ClientConnection, ConnectionListener } from "./protocol
 export { buildDemoWorld, chamberOptionsFor } from "./world/demoWorld.js";
 export type { DemoWorld, AreaDef, PortalLink } from "./world/demoWorld.js";
 export { GameHost } from "./host/gameHost.js";
-export type { GameHostOptions } from "./host/gameHost.js";
+export type { GameHostOptions, GamePublicInfo } from "./host/gameHost.js";
 // combat surface the client renders from (Docs/04, Docs/08)
 export { EventKind } from "./sim/combat/events.js";
 export type { CombatEvent } from "./sim/combat/events.js";

@@ -58,6 +58,13 @@ export interface GameHostOptions {
   log?: (line: string) => void;
 }
 
+/** Read-only public snapshot for the game service's REST API (no secrets). */
+export interface GamePublicInfo {
+  server: { tick: number; uptimeSec: number; players: number; areas: number };
+  areas: { id: number; name: string; players: number; enemies: number; allies: number }[];
+  players: { id: number; name: string; area: number; kind: string }[];
+}
+
 const ENEMY_FAMILY_CYCLE = ["slag-revenant", "shardspitter", "carrion-herald"];
 
 function latencyTicks(rttMs: number): number {
@@ -79,6 +86,7 @@ export class GameHost {
   private readonly cooldownScale: number;
   private readonly packs = new Map<number, [string, [number, number, number]][]>();
   private tick = 0;
+  private readonly startedAt = Date.now();
   private timer: ReturnType<typeof setTimeout> | null = null;
   private budgetTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -105,6 +113,41 @@ export class GameHost {
 
   static ready(): Promise<unknown> {
     return initPhysics();
+  }
+
+  /**
+   * Read-only public snapshot (game-service REST API). Non-performance-critical
+   * structural data; no secrets. Cheap to compute (a read over current state);
+   * called on demand by REST, off the tick loop.
+   */
+  publicInfo(): GamePublicInfo {
+    const areas: GamePublicInfo["areas"] = [];
+    for (const [id, def] of this.world.areas) {
+      const island = this.islands.get(id);
+      let enemies = 0;
+      let allies = 0;
+      if (island) {
+        for (const e of island.entities.values()) {
+          if (e.combat?.team === 1) enemies += 1;
+          else if (e.isBot && e.combat?.team === 0) allies += 1;
+        }
+      }
+      const players = [...this.sessions.values()].filter((s) => s.areaId === id && s.entity).length;
+      areas.push({ id, name: def.ref.name, players, enemies, allies });
+    }
+    const players = [...this.sessions.values()]
+      .filter((s) => s.entity)
+      .map((s) => ({ id: s.playerId, name: s.name, area: s.areaId, kind: "warden" }));
+    return {
+      server: {
+        tick: this.tick,
+        uptimeSec: Math.round((Date.now() - this.startedAt) / 1000),
+        players: players.length,
+        areas: this.world.areas.size,
+      },
+      areas,
+      players,
+    };
   }
 
   private area(areaId: number): { def: AreaDef; island: AreaIsland } {
