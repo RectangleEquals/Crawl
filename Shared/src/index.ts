@@ -19,3 +19,5 @@ export type { CombatEvent } from "./sim/combat/events.js";
 export { TAG_BIT, TAG_KINDS } from "./sim/combat/state.js";
 export type { TagKind } from "./sim/combat/state.js";
 export { KIND_ORDER, getArchetype } from "./data/archetypes.js";
+// procgen — Archipelago solvability core (Docs/07; M4)
+export * from "./procgen/index.js";
