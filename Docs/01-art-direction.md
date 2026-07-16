@@ -72,11 +72,19 @@ they get the same palette discipline as everything else.
 ### 2.4 Geometry fidelity: the two-tier rule
 
 Retro low-poly is not one thing. We deliberately mix two console eras so the world feels crafted, not
-prototyped:
+prototyped.
+
+**The fidelity band — "intent without laziness":** aim *slightly above* a blockout and *slightly below* a
+modern AAA asset. The tell of laziness is the **pure-90°/180° blockout** (right-angle boxes, flat unbroken
+runs — the Minecraft/greybox look); we don't want that. But we also don't want the dense triangle counts of
+modern art. The target is the middle: a few deliberate curves, bevels, chamfers, **45° cuts**, lattices, and
+silhouette breaks that show a shape was *designed* — carried the rest of the way by surface maps (§2.5) rather
+than by geometry. Environments, props, **and weapons** all sit in this band: visually striking, economically
+modelled.
 
 | Tier | Applies to | Reference era | Shape language |
 |---|---|---|---|
-| **Environment / prop tier** | Walls, floors, arches, columns, stairs, dais, terrain, furniture, breakables, hero set-pieces (Obelisk, chorale-stone) | **PS2** (a blend of flat, curved & moderately detailed) | Flat planes *plus* honest curves, bevelled edges, radial/lathed forms, chamfers, and small protruding/recessed silhouette detail. Not perfectly boxy 45° geometry. |
+| **Environment / prop tier** | Walls, floors, arches, columns, stairs, dais, terrain, furniture, breakables, hero set-pieces (Obelisk, chorale-stone) | **PS2** (a blend of flat, curved & moderately detailed) | Flat planes *plus* honest curves, bevelled edges, radial/lathed forms, chamfers, lattices, and small protruding/recessed silhouette detail. **Avoid the pure right-angle blockout look** — perfect **90°** corners and long **180°** flat runs are what read as "boxy"; **45° cuts and any in-between angles are welcome**, as are curves and chamfers. |
 | **Character / creature tier** | Player classes, NPCs, enemies, bosses | **N64** (chunky, readable, low-count) | Simple, blocky-but-organic masses; strong silhouette; few tris; personality from proportion, palette and animation — *not* from geometric density. Detail is carried by texture + maps. |
 
 Both tiers live under the same modern lighting. The point of the split: **environments reward looking closely;
