@@ -34,6 +34,34 @@ export interface ProgressionItem {
 
 export type Placement = Map<LocationId, string>; // location → item id
 
+/**
+ * Does the region graph contain a directed cycle (ignoring access rules)?
+ * A Reach with loops (branch → back-edge shortcut) is a graph, not a tree —
+ * the structural home of backtracking and remembered locks (Docs/07 §5).
+ */
+export function hasCycle(g: RegionGraph): boolean {
+  const adj = new Map<RegionId, RegionId[]>();
+  for (const e of g.edges) {
+    let list = adj.get(e.from);
+    if (!list) adj.set(e.from, (list = []));
+    list.push(e.to);
+  }
+  const WHITE = 0, GRAY = 1, BLACK = 2;
+  const color = new Map<RegionId, number>();
+  const visit = (u: RegionId): boolean => {
+    color.set(u, GRAY);
+    for (const v of adj.get(u) ?? []) {
+      const c = color.get(v) ?? WHITE;
+      if (c === GRAY) return true;
+      if (c === WHITE && visit(v)) return true;
+    }
+    color.set(u, BLACK);
+    return false;
+  };
+  for (const r of g.regions) if ((color.get(r) ?? WHITE) === WHITE && visit(r)) return true;
+  return false;
+}
+
 /** Regions reachable from `start` given held capabilities (fixed-point BFS). */
 export function reachableRegions(g: RegionGraph, held: ReadonlySet<Capability>): Set<RegionId> {
   const reached = new Set<RegionId>([g.start]);

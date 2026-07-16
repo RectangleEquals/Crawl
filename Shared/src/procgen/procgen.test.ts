@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { Rng } from "../math/rng.js";
-import { ALWAYS, and, have, or, type Rule } from "./logic.js";
-import { computeSpheres, isSolvable, type ProgressionItem, type RegionGraph } from "./graph.js";
+import { ALWAYS, and, have, or, ruleCaps, type Rule } from "./logic.js";
+import { computeSpheres, hasCycle, isSolvable, type ProgressionItem, type RegionGraph } from "./graph.js";
 import { assumedFill } from "./fill.js";
+import { generateReach, M4_GADGETS } from "./grammar.js";
+import { embedReach, reachableAreas, rememberedLocks, worldReachesAll, type ReachWorld } from "./director.js";
 
 // M4 launch locks (Docs/06 §2 #1–2): Graviton Tether gap, Gravitic Impeller ledge.
 const TETHER: ProgressionItem = { id: "graviton-tether", grants: "tether" };
@@ -113,3 +115,134 @@ function randomRule(rng: Rng, caps: string[]): Rule {
   if (roll < 0.9) return or(have(c()), have(c()));
   return and(have(c()), have(c()));
 }
+
+// --- Reach region-graph grammar (grammar.ts) ---
+
+describe("reach grammar", () => {
+  const M4_CAPS = new Set(M4_GADGETS.map((g) => g.grants));
+
+  it("generates a solvable Reach with both gadgets collectible", () => {
+    const r = generateReach({ seed: "reach-alpha" });
+    const byId = new Map(r.items.map((i) => [i.id, i] as const));
+    expect(isSolvable(r.graph, r.placement, byId, r.startCaps)).toBe(true);
+    const { held, reachedAll } = computeSpheres(r.graph, r.placement, byId, r.startCaps);
+    expect(reachedAll).toBe(true); // no stranded locations
+    for (const g of M4_GADGETS) expect(held.has(g.grants)).toBe(true); // both Instruments obtainable
+    // both gadgets actually placed somewhere
+    expect(new Set(r.placement.values())).toEqual(new Set(r.items.map((i) => i.id)));
+  });
+
+  it("has the Reach cadence + capability gates + a backtracking loop", () => {
+    const r = generateReach({ seed: "reach-shape", spineLength: 5 });
+    expect(r.graph.start).toBe(r.meta.sanctum);
+    expect(r.meta.spine).toHaveLength(5); // 5 areas → boss → next Sanctum
+    expect(r.graph.regions.has(r.meta.boss)).toBe(true);
+    expect(r.graph.regions.has(r.meta.nextSanctum)).toBe(true);
+    expect(r.meta.gatedEdges.length).toBeGreaterThan(0); // something is gadget-gated
+    // every gate references only real gadget capabilities
+    for (const e of r.meta.gatedEdges) for (const c of ruleCaps(e.rule)) expect(M4_CAPS.has(c)).toBe(true);
+    // the graph loops (branch back-edge) — it's a graph, not a tree
+    expect(r.meta.cycleEdges.length).toBeGreaterThan(0);
+    expect(hasCycle(r.graph)).toBe(true);
+  });
+
+  it("is deterministic for a fixed seed", () => {
+    const ser = (x: ReturnType<typeof generateReach>): string =>
+      JSON.stringify({
+        edges: x.graph.edges,
+        locations: [...x.graph.locations.entries()],
+        placement: [...x.placement.entries()],
+      });
+    expect(ser(generateReach({ seed: "same" }))).toBe(ser(generateReach({ seed: "same" })));
+    expect(ser(generateReach({ seed: "a" }))).not.toBe(ser(generateReach({ seed: "b" })));
+  });
+
+  it("1000 generated Reaches are ALWAYS solvable (Docs/11 M4 accept)", () => {
+    for (let s = 0; s < 1000; s++) {
+      const r = generateReach({ seed: `soak-${s}` }); // throws if the fill ever fails
+      const byId = new Map(r.items.map((i) => [i.id, i] as const));
+      const { reachedAll } = computeSpheres(r.graph, r.placement, byId, r.startCaps);
+      expect(isSolvable(r.graph, r.placement, byId, r.startCaps), `seed ${s}: unsolvable`).toBe(true);
+      expect(reachedAll, `seed ${s}: stranded location`).toBe(true);
+    }
+  });
+});
+
+// --- Reach Director: embedding regions → a navigable area/portal world (director.ts) ---
+
+describe("reach director (area embedding)", () => {
+  const byId = (w: ReachWorld): Map<string, ProgressionItem> => new Map(w.items.map((i) => [i.id, i] as const));
+  const KEYS = new Set(["s", "n1", "n2"]);
+
+  it("embeds a fully-connected, solvable world", () => {
+    const w = embedReach(generateReach({ seed: "dir-alpha" }), "dir-alpha");
+    // every region became exactly one area; start is the Sanctum
+    expect(w.areas.get(w.startAreaId)?.role).toBe("sanctum");
+    // placement solves on the CONCRETE embedded topology
+    expect(isSolvable(w.graph, w.placement, byId(w), w.startCaps)).toBe(true);
+    // holding all capabilities, walking portals reaches every area (no islands)
+    const allCaps = new Set([...w.startCaps, ...w.items.map((i) => i.grants)]);
+    expect(reachableAreas(w, allCaps).size).toBe(w.areas.size);
+    expect(worldReachesAll(w)).toBe(true);
+  });
+
+  it("uses only real chamber portals, ≤3 per area, symmetrically linked", () => {
+    const w = embedReach(generateReach({ seed: "dir-portals" }), "dir-portals");
+    for (const [id, area] of w.areas) {
+      expect(area.links.size).toBeLessThanOrEqual(3);
+      // start has no back-door; everyone else links home via `s`
+      if (id === w.startAreaId) expect(area.links.has("s")).toBe(false);
+      else expect(area.links.get("s")?.requires).toEqual(ALWAYS);
+      for (const [pk, link] of area.links) {
+        expect(KEYS.has(pk)).toBe(true);
+        expect(KEYS.has(link.toPortalKey)).toBe(true);
+        // the doorway exists on the other side and points straight back
+        const back = w.areas.get(link.toAreaId)?.links.get(link.toPortalKey);
+        expect(back).toBeDefined();
+        expect(back?.toAreaId).toBe(id);
+        expect(back?.toPortalKey).toBe(pk);
+      }
+    }
+  });
+
+  it("produces gadget-gated doorways (the metroidvania locks)", () => {
+    const w = embedReach(generateReach({ seed: "dir-gates" }), "dir-gates");
+    const caps = new Set(w.items.map((i) => i.grants));
+    const gated = [...w.areas.values()].flatMap((a) => [...a.links.values()]).filter((l) => l.requires.k !== "always");
+    expect(gated.length).toBeGreaterThan(0);
+    for (const g of gated) for (const c of ruleCaps(g.requires)) expect(caps.has(c)).toBe(true);
+  });
+
+  it("is deterministic for a fixed reach + world seed", () => {
+    const ser = (w: ReachWorld): string =>
+      JSON.stringify({
+        start: w.startAreaId,
+        areas: [...w.areas].map(([id, a]) => [id, a.ref, a.role, [...a.links]]),
+        placement: [...w.placement.entries()],
+      });
+    const mk = (): ReachWorld => embedReach(generateReach({ seed: "fixed" }), "fixed");
+    expect(ser(mk())).toBe(ser(mk()));
+  });
+
+  it("300 embedded Reaches are ALWAYS solvable & fully connected", () => {
+    for (let s = 0; s < 300; s++) {
+      const w = embedReach(generateReach({ seed: `dsoak-${s}` }), `dsoak-${s}`); // throws on fill failure
+      const allCaps = new Set([...w.startCaps, ...w.items.map((i) => i.grants)]);
+      expect(reachableAreas(w, allCaps).size, `seed ${s}: disconnected`).toBe(w.areas.size);
+      expect(isSolvable(w.graph, w.placement, byId(w), w.startCaps), `seed ${s}: unsolvable`).toBe(true);
+    }
+  });
+
+  it("remembered locks: doors are seen-but-locked without gadgets, then all open with them", () => {
+    // most Reaches have at least one gadget-gated door visible from the start
+    // frontier; every Reach must have zero remembered locks once all caps held.
+    let sawLocks = 0;
+    for (let s = 0; s < 50; s++) {
+      const w = embedReach(generateReach({ seed: `rl-${s}` }), `rl-${s}`);
+      if (rememberedLocks(w, w.startCaps).length > 0) sawLocks++;
+      const allCaps = new Set([...w.startCaps, ...w.items.map((i) => i.grants)]);
+      expect(rememberedLocks(w, allCaps), `seed ${s}: lock remains with all caps`).toHaveLength(0);
+    }
+    expect(sawLocks).toBeGreaterThan(0); // backtracking content actually gets generated
+  });
+});

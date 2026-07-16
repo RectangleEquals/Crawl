@@ -8,3 +8,5 @@
 export * from "./logic.js";
 export * from "./graph.js";
 export * from "./fill.js";
+export * from "./grammar.js";
+export * from "./director.js";
