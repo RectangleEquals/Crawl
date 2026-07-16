@@ -19,6 +19,7 @@ interface WorkerConfig {
   bots?: number;
   enemies?: number;
   cdscale?: number;
+  seed?: string;
 }
 
 const scope = self as unknown as WorkerScope;
@@ -69,7 +70,7 @@ const listener: ConnectionListener = {
 async function boot(cfg: WorkerConfig): Promise<void> {
   await GameHost.ready();
   const host = new GameHost(listener, {
-    seed: "solo",
+    seed: cfg.seed ?? "solo",
     botCount: cfg.bots ?? 1,
     enemyCount: cfg.enemies ?? 4,
     cooldownScale: cfg.cdscale ?? 1,

@@ -22,6 +22,7 @@ export class Hud {
   private readonly instrumentsEl: HTMLElement;
   private readonly sealedEl: HTMLElement;
   private readonly acquireEl: HTMLElement;
+  private readonly astrolabeEl: HTMLElement;
   private acquireTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(root: HTMLElement) {
@@ -40,6 +41,7 @@ export class Hud {
       </div>
       <div class="hud-sealed" id="hud-sealed"></div>
       <div class="hud-acquire" id="hud-acquire"></div>
+      <div class="hud-astrolabe" id="hud-astrolabe"></div>
       <div class="hud-combat">
         <div class="cbar"><div class="cbar-fill hp" id="hud-hp"></div><div class="cbar-text" id="hud-hp-text"></div></div>
         <div class="cbar bulwark"><div class="cbar-fill res" id="hud-res-fill"></div></div>
@@ -64,6 +66,7 @@ export class Hud {
     this.instrumentsEl = q("#hud-instruments");
     this.sealedEl = q("#hud-sealed");
     this.acquireEl = q("#hud-acquire");
+    this.astrolabeEl = q("#hud-astrolabe");
 
     const abilities = q("#hud-abilities");
     this.abilityEls = ABILITY_NAMES.map((name, i) => {
@@ -120,6 +123,20 @@ export class Hud {
     } else {
       this.sealedEl.style.display = "none";
     }
+  }
+
+  /** Astrolabe remembered-lock journal: sealed ways seen but not yet openable. */
+  setAstrolabe(locks: readonly { areaName: string; gadget: string }[]): void {
+    if (locks.length === 0) {
+      this.astrolabeEl.style.display = "none";
+      return;
+    }
+    const rows = locks
+      .slice(0, 5)
+      .map((l) => `<div class="astro-row">⊘ <span class="astro-area">${l.areaName}</span> — needs the <span class="astro-gadget">${l.gadget}</span></div>`)
+      .join("");
+    this.astrolabeEl.innerHTML = `<div class="astro-title">✶ Astrolabe — Remembered Locks</div>${rows}`;
+    this.astrolabeEl.style.display = "block";
   }
 
   /** Brief flourish when an Instrument is acquired. */

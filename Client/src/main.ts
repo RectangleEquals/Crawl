@@ -41,7 +41,7 @@ async function makeTransport(): Promise<{ transport: Transport; mode: "online" |
   const worker = new Worker(new URL("./worker/integratedServer.ts", import.meta.url), { type: "module" });
   // solo tuning knobs (parity with the server's env vars): ?bots ?enemies ?cdscale
   const numParam = (k: string): number | undefined => (params.has(k) ? Number(params.get(k)) : undefined);
-  worker.postMessage({ __cfg: { bots: numParam("bots"), enemies: numParam("enemies"), cdscale: numParam("cdscale") } });
+  worker.postMessage({ __cfg: { bots: numParam("bots"), enemies: numParam("enemies"), cdscale: numParam("cdscale"), seed: params.get("seed") ?? undefined } });
   const t = new WorkerTransport(worker);
   return { transport: simRtt > 0 ? withLatency(t, simRtt) : t, mode: "solo" };
 }
@@ -355,6 +355,7 @@ function frame(now: number): void {
     hud.setCombat(session.self);
     hud.setRoster(session.rosterNames(), playerName);
     hud.setInstruments(session.gadgetStatus());
+    hud.setAstrolabe(session.rememberedLocks());
   }
   requestAnimationFrame(frame);
 }

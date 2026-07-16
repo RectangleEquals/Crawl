@@ -10,7 +10,7 @@
 import {
   AreaPhysics, MsgType, PROTOCOL_VERSION, SUNKEN_PARISH, Buttons, SelfFlag, EntityFlag,
   M4_GADGET_DEFS, chamberOptionsFor, decode, encode, gadgetBit, generateChamber, planReach, stepCharacter,
-  type AnyMsg, type AreaRef, type ChamberData, type CharState, type CharacterBody,
+  type AnyMsg, type AreaRef, type Capability, type ChamberData, type CharState, type CharacterBody,
   type CombatEvent, type EntityState, type InputCmd, type PlanArea, type ProjectileState,
   type ReachPlan, type SnapshotMsg, type Transport, type Vec3,
 } from "@crawlstar/shared";
@@ -75,6 +75,7 @@ export class GameSession {
   private readonly names = new Map<number, { name: string; isBot: boolean }>();
   private eventBuffer: CombatEvent[] = [];
   private latestProjectiles: ProjectileState[] = [];
+  private readonly visited = new Set<number>(); // areas entered (Astrolabe memory)
   readonly clock = new RenderClock();
 
   constructor(
@@ -134,6 +135,7 @@ export class GameSession {
 
   private enterArea(ref: AreaRef, spawn: Vec3, spawnYaw: number): void {
     this.areaRef = ref;
+    this.visited.add(ref.areaId); // the Astrolabe only journals ways you've seen
     this.chamber = generateChamber(SUNKEN_PARISH, ref.seed, chamberOptionsFor(ref));
     this.mirror?.dispose();
     this.mirror = new AreaPhysics(this.chamber.colliders);
@@ -289,11 +291,39 @@ export class GameSession {
       const t = portal.trigger;
       const p = feetWorld;
       if (p[0] >= t.min[0] && p[0] <= t.max[0] && p[1] >= t.min[1] && p[1] <= t.max[1]) {
-        const def = M4_GADGET_DEFS.find((g) => g.capability === link.requiresCap);
-        return def ? def.name : link.requiresCap;
+        return this.gadgetName(link.requiresCap);
       }
     }
     return null;
+  }
+
+  /**
+   * Cartographer's Astrolabe (Docs/06): the remembered-lock journal — every
+   * gated doorway the party has SEEN (in a visited area) but cannot yet open,
+   * with the Instrument it needs. This is what makes backtracking a guided loop;
+   * an entry clears the moment its Instrument is collected.
+   */
+  rememberedLocks(): { areaName: string; gadget: string }[] {
+    if (!this.plan) return [];
+    const seen = new Set<string>();
+    const out: { areaName: string; gadget: string }[] = [];
+    for (const areaId of this.visited) {
+      const area = this.plan.areas.get(areaId);
+      if (!area) continue;
+      for (const [pk, link] of area.links) {
+        if (link.requiresCap == null || this.hasGadget(gadgetBit(link.requiresCap))) continue;
+        const key = `${areaId}:${pk}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push({ areaName: area.ref.name, gadget: this.gadgetName(link.requiresCap) });
+      }
+    }
+    return out;
+  }
+
+  private gadgetName(cap: Capability): string {
+    const def = M4_GADGET_DEFS.find((g) => g.capability === cap);
+    return def ? def.name : cap;
   }
 
   /** Party members (Wardens) for the HUD roster. */
