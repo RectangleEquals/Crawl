@@ -7,3 +7,5 @@ export type { MeshData, Vec3, WorldBox } from "./mesh.js";
 export { generateChamber } from "./chamber.js";
 export type { ChamberData, ChamberOptions, PointLightSpec, PortalSpec } from "./chamber.js";
 export { MODULE, WALL_H } from "./kit.js";
+export { areaBiome, AREA_BIOMES, SUNKEN_PARISH_BIOME } from "./biomes.js";
+export type { AreaBiome } from "./biomes.js";

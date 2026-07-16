@@ -10,7 +10,7 @@ import { POS_SCALE, VEL_SCALE, YAW_SCALE } from "../sim/constants.js";
 import { EventKind, type CombatEvent } from "../sim/combat/events.js";
 import type { Vec3 } from "../art/mesh.js";
 
-export const PROTOCOL_VERSION = 4;
+export const PROTOCOL_VERSION = 5;
 
 export enum MsgType {
   // client → server
@@ -98,6 +98,7 @@ export interface WelcomeMsg {
   spawn: Vec3;
   spawnYaw: number;
   worldSeed: string; // client reconstructs the Reach plan (gates + gadget pickups) from this
+  reachIndex: number; // depth of this Reach — drives the generation complexity curve (client must match)
 }
 
 export interface ProjectileState {
@@ -191,6 +192,7 @@ export function encode(msg: AnyMsg): Uint8Array {
       writeVec3Q(w, msg.spawn);
       writeYawQ(w, msg.spawnYaw);
       w.str(msg.worldSeed);
+      w.u16(msg.reachIndex);
       break;
     case MsgType.Snapshot:
       w.u32(msg.tick).u32(msg.lastInputSeq);
@@ -259,7 +261,7 @@ export function decode(data: Uint8Array): AnyMsg {
     case MsgType.Pong:
       return { type, nonce: r.u32() };
     case MsgType.Welcome:
-      return { type, playerId: r.u16(), area: readAreaRef(r), spawn: readVec3Q(r), spawnYaw: readYawQ(r), worldSeed: r.str() };
+      return { type, playerId: r.u16(), area: readAreaRef(r), spawn: readVec3Q(r), spawnYaw: readYawQ(r), worldSeed: r.str(), reachIndex: r.u16() };
     case MsgType.Snapshot: {
       const tick = r.u32();
       const lastInputSeq = r.u32();

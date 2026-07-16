@@ -20,6 +20,7 @@ interface WorkerConfig {
   enemies?: number;
   cdscale?: number;
   seed?: string;
+  reachIndex?: number;
 }
 
 const scope = self as unknown as WorkerScope;
@@ -74,6 +75,7 @@ async function boot(cfg: WorkerConfig): Promise<void> {
     botCount: cfg.bots ?? 1,
     enemyCount: cfg.enemies ?? 4,
     cooldownScale: cfg.cdscale ?? 1,
+    reachIndex: cfg.reachIndex ?? 0,
     log: (line) => console.log(`[integrated-server] ${line}`),
   });
   host.start();

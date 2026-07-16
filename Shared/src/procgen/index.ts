@@ -10,3 +10,5 @@ export * from "./graph.js";
 export * from "./fill.js";
 export * from "./grammar.js";
 export * from "./director.js";
+export * from "./complexity.js";
+export * from "./area/index.js";

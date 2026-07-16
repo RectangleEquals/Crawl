@@ -11,7 +11,7 @@ export { ByteReader, ByteWriter } from "./protocol/codec.js";
 export type { Transport, ClientConnection, ConnectionListener } from "./protocol/transport.js";
 export { buildDemoWorld, chamberOptionsFor } from "./world/demoWorld.js";
 export type { DemoWorld, AreaDef, PortalLink } from "./world/demoWorld.js";
-export { planReach, gadgetBit } from "./world/reachWorld.js";
+export { planReach, gadgetBit, areaComposeInput } from "./world/reachWorld.js";
 export type { ReachPlan, PlanArea, PlanPortal, PlanGadget, ReachPlanOptions } from "./world/reachWorld.js";
 export { GameHost } from "./host/gameHost.js";
 export type { GameHostOptions, GamePublicInfo } from "./host/gameHost.js";

@@ -35,6 +35,14 @@ Everything here is data-driven (style files + generators), so a later biome auto
 fidelity of whatever pass is current. Deferred items live in `.claude/BACKLOG.md` (Gameplay/client + a new
 art-fidelity block); the per-milestone one-liners below fold each into its milestone's scope.
 
+**World-variety track (parallel, long-running, started 2026-07-16):** the **area composer**
+([07](07-procgen.md) §5.1–5.3) turns each region into a generated **multi-room, varied, loopable** area (cyclic
+room-graph + socket stitching), with a **depth-driven complexity curve** (openness/loops/maze rise gradually
+to a ceiling) and **Z-ready** data models. First slice = Sunken Parish, horizontal, shapes-first. This track
+keeps growing all project — biomes (Undercroft next; outdoor ~M8; more beyond the canon four), room/connector
+archetypes, contextual props, gameplay set-pieces (arena-lock/hazards), navmesh, vertical content — toward
+near-limitless variety. See `.claude/BACKLOG.md` "World Composer / kit expansion".
+
 ---
 
 ## M1 — Scaffold & the Look

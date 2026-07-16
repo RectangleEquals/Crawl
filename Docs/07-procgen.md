@@ -91,6 +91,48 @@ gadget-locked mechanic **only if** the required Instrument sits in an earlier sp
    verifies: every `bonus`-tagged reward is loot/currency only, and every boss gadget-mechanic's
    Instrument is in an earlier sphere.
 
+### 5.1 Area composition — the World Composer (implements step 3)
+
+Step 3 above ("grid embedding") is a **per-area** sub-generator that turns each region into a **multi-room,
+varied, loopable area** — not one prefab room. It is an extensible, registry-driven system (grows toward
+thousands of pieces / many biomes). Code: `Shared/src/procgen/area/` (+ `complexity.ts`, `art/biomes.ts`).
+
+**Algorithm — hybrid cyclic-graph + socket stitching** (Dormans/*Unexplored* cyclic generation for guaranteed
+loops; socket-based modular stitching for non-90° connections). Pipeline (`composeArea`, all seeded):
+1. **Footprint** — area size in world XY × the depth complexity budget (§5.2).
+2. **Layout** (`layout.ts`) — a **cyclic room-graph**: a spanning tree of rooms + extra cycle edges (loops =
+   backtracking). Rooms pick an **archetype** (`rooms.ts`: `rectHall`, `rotunda` faceted round room, `gallery`
+   colonnade — more to come: caverns, outdoor patches); edges pick a **connector** (`connectors.ts`: straight/
+   curved/angled corridors). Each edge is **directed + carries `traversal` + `gate`** (walk today; the same
+   shape expresses one-way drops and climb-gated ledges — see Z-readiness §5.3).
+3. **Embed** — place rooms by **socket matching** (align a free parent socket to a child socket at varied
+   angles — rotunda sockets give angled corridors); resolve overlaps by retry/drop (always valid, never
+   overlapping); close cycles with extra connectors.
+4. **Tag / populate** — external portals on outward sockets (keyed to the director's links), gadget pickups
+   seated in leaf/vault rooms, biome-contextual props + lights. (Arena-lockdown / hazard set-pieces: hooks
+   now, built next.)
+5. **Emit** (`emit.ts`) — walk the layout → `ChamberData` (meshes/colliders/portals/lights), consumed
+   unchanged by `AreaIsland` (server) + `buildArea` (client). Split light-layout / heavy-emit so `planReach`
+   reads gadget/portal anchors cheaply; both server and client run the SAME `composeArea` deterministically.
+
+### 5.2 Difficulty-scaled complexity (deterministic, depth-driven)
+
+`complexity.ts` maps a **depth** (Reach index × step + area position) to a **`ComplexityBudget`** — the *means*
+of the generation knobs (footprint, room count, loop chance/count, room-size ceiling, maze/branchiness),
+rising via a smooth curve to a **ceiling** then plateauing. The layout samples **around** those means (seeded
+variance), so **linearity gets rarer with depth but never vanishes** (a deep area is *usually* bigger/loopier,
+occasionally simple). This is the spatial analog of the combat pacing curve ([08](08-enemies-bosses.md) §5).
+Waymark **Omens** ([09](09-modes-social.md) §5) can bias the budget (a "labyrinthine" Omen → more openness).
+
+### 5.3 Z-axis (vertical) readiness
+
+The composer is **Z-native by data model** even though the first slice is horizontal: sockets carry 3D
+`pos`/`dir` + `traversal` (`walk|drop|climb|ladder|rope`) + `gate`; rooms carry `baseZ` + a multi-level slot;
+the connector registry reserves vertical archetypes (stairs/ladder/rope/drop-shaft). **Solvability already
+covers Z**: a one-way drop is a directed edge with no reverse; a climb-gated ledge is an edge with
+`rule = have(<gadget>)` — the assumed-fill + reachability check (§5 steps 2, 5) handle both. Deferred: vertical
+geometry + physics (climb/ladder, one-way platforms, moving platforms, fall/void death).
+
 ## 6. Backtracking & Remembered Locks
 
 - Optional gates may reference Instruments from **future spheres** (lookahead): players see the lock, the

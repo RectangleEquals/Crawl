@@ -9,7 +9,7 @@
 
 import {
   AreaPhysics, MsgType, PROTOCOL_VERSION, SUNKEN_PARISH, Buttons, SelfFlag, EntityFlag,
-  M4_GADGET_DEFS, chamberOptionsFor, decode, encode, gadgetBit, generateChamber, planReach, stepCharacter,
+  M4_GADGET_DEFS, areaComposeInput, chamberOptionsFor, composeArea, decode, encode, gadgetBit, generateChamber, planReach, stepCharacter,
   type AnyMsg, type AreaRef, type Capability, type ChamberData, type CharState, type CharacterBody,
   type CombatEvent, type EntityState, type InputCmd, type PlanArea, type ProjectileState,
   type ReachPlan, type SnapshotMsg, type Transport, type Vec3,
@@ -59,6 +59,7 @@ export class GameSession {
   rttMs = 0;
   yaw = 0;
   worldSeed = "";
+  reachIndex = 0;
   plan: ReachPlan | null = null;
 
   self: SelfCombat = { hp: 1, maxHp: 1, resource: 0, maxResource: 0, downed: false, blocking: false, tagFlags: 0, abilityReady: 0, gadgetBits: 0 };
@@ -94,7 +95,8 @@ export class GameSession {
       case MsgType.Welcome:
         this.playerId = msg.playerId;
         this.worldSeed = msg.worldSeed;
-        this.plan = planReach(msg.worldSeed); // reconstruct gates + gadget pickups locally
+        this.reachIndex = msg.reachIndex;
+        this.plan = planReach(msg.worldSeed, { reachIndex: msg.reachIndex }); // reconstruct gates + gadget pickups + layouts
         this.enterArea(msg.area, msg.spawn, msg.spawnYaw);
         this.phase = "playing";
         break;
@@ -136,7 +138,10 @@ export class GameSession {
   private enterArea(ref: AreaRef, spawn: Vec3, spawnYaw: number): void {
     this.areaRef = ref;
     this.visited.add(ref.areaId); // the Astrolabe only journals ways you've seen
-    this.chamber = generateChamber(SUNKEN_PARISH, ref.seed, chamberOptionsFor(ref));
+    // rebuild the SAME multi-room area the server composed (deterministic from
+    // the plan the client reconstructed); fall back to a bare chamber if unknown.
+    const pa = this.plan?.areas.get(ref.areaId);
+    this.chamber = pa ? composeArea(areaComposeInput(pa)).chamber : generateChamber(SUNKEN_PARISH, ref.seed, chamberOptionsFor(ref));
     this.mirror?.dispose();
     this.mirror = new AreaPhysics(this.chamber.colliders);
     this.body = this.mirror.createCharacter(spawn);

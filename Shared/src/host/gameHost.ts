@@ -6,9 +6,9 @@
  * extended combat snapshot.
  */
 
-import { planReach, gadgetBit, type PlanGadget, type PlanPortal, type ReachPlan } from "../world/reachWorld.js";
-import { generateChamber, type ChamberData } from "../art/chamber.js";
-import { SUNKEN_PARISH } from "../art/style.js";
+import { planReach, gadgetBit, areaComposeInput, type PlanGadget, type PlanPortal, type ReachPlan } from "../world/reachWorld.js";
+import { composeArea } from "../procgen/area/compose.js";
+import { type ChamberData } from "../art/chamber.js";
 import { AreaIsland, type IslandEntity } from "../sim/area.js";
 import { initPhysics } from "../sim/physics.js";
 import { Rng } from "../math/rng.js";
@@ -71,6 +71,8 @@ export interface GameHostOptions {
   enemyCount?: number;
   /** Multiplies AI ability cooldowns (default 1; >1 = enemies/allies attack less often). */
   cooldownScale?: number;
+  /** Reach depth — scales world-generation complexity (openness/loops/maze). */
+  reachIndex?: number;
   log?: (line: string) => void;
 }
 
@@ -114,10 +116,11 @@ export class GameHost {
     const seed = opts.seed ?? "m3-demo";
     this.seed = seed;
     this.rng = new Rng(seed);
-    // M4: the Reach Director generates the whole area/portal world (regions →
-    // gated areas + gadget pickups). Chambers/islands are built lazily per area
-    // on first entry (§area) so startup cost is one chamber, not the whole Reach.
-    this.plan = planReach(seed);
+    // M4 + composer: the Reach Director generates the region/portal world; the
+    // area composer turns each region into a multi-room, varied area (deeper
+    // Reaches ⇒ more complex — Docs/07). Chambers/islands are built lazily per
+    // area on first entry (§area) so startup cost is one area, not the whole Reach.
+    this.plan = planReach(seed, { reachIndex: Math.max(0, Math.floor(opts.reachIndex ?? 0)) });
 
     // The ally Warden(s) and the packs are (re)spawned when a player enters an
     // area (below) — so a lone ally can't farm packs before anyone arrives, and
@@ -180,7 +183,7 @@ export class GameHost {
     if (cached) return cached;
     const pa = this.plan.areas.get(areaId);
     if (!pa) throw new Error(`unknown area ${areaId}`);
-    const chamber = generateChamber(SUNKEN_PARISH, pa.ref.seed, { roofHoles: pa.ref.roofHoles, waterLevel: pa.ref.waterLevel });
+    const chamber = composeArea(areaComposeInput(pa)).chamber;
     const loaded: LoadedArea = { ref: pa.ref, chamber, links: pa.links, gadgets: pa.gadgets, island: new AreaIsland(chamber) };
     this.areaCache.set(areaId, loaded);
     return loaded;
@@ -303,7 +306,7 @@ export class GameHost {
     this.sessions.set(conn.id, session);
     this.players.set(playerId, session);
 
-    this.send(conn, { type: MsgType.Welcome, playerId, area: loaded.ref, spawn: feet, spawnYaw: loaded.chamber.spawn.yaw, worldSeed: this.seed });
+    this.send(conn, { type: MsgType.Welcome, playerId, area: loaded.ref, spawn: feet, spawnYaw: loaded.chamber.spawn.yaw, worldSeed: this.seed, reachIndex: this.plan.reachIndex });
     this.sendRosterTo(conn, loaded.island, playerId);
     this.broadcastArea(areaId, { type: MsgType.EntityJoin, id: playerId, name, isBot: false }, playerId);
     this.log(`join: ${name} (#${playerId})`);
