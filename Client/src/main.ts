@@ -6,6 +6,7 @@ import { buildAreaScene, type FlickerLight } from "./scene/buildArea.js";
 import { GameSession } from "./game/session.js";
 import { Avatar } from "./game/avatar.js";
 import { WorldLabels } from "./game/worldLabels.js";
+import { GadgetPickups } from "./game/gadgetPickups.js";
 import { CombatFx } from "./game/combatFx.js";
 import { InputSystem } from "./input/actions.js";
 import { WsTransport, WorkerTransport, withLatency } from "./net/transports.js";
@@ -65,6 +66,8 @@ let myAvatar: Avatar | null = null;
 let currentScene: THREE.Scene | null = null;
 let fx: CombatFx | null = null;
 let labels: WorldLabels | null = null;
+let gadgetPickups: GadgetPickups | null = null;
+let prevGadgetBits = 0;
 
 function rebuildScene(ref: AreaRef, chamber: ChamberData): void {
   const built = buildAreaScene(ref, chamber);
@@ -96,6 +99,8 @@ function rebuildScene(ref: AreaRef, chamber: ChamberData): void {
   }
   if (!labels) labels = new WorldLabels(camera, canvas, document.body);
   else labels.clear();
+  if (!gadgetPickups) gadgetPickups = new GadgetPickups(built.scene);
+  else gadgetPickups.setScene(built.scene);
   hud.setArea(ref.name);
 }
 
@@ -138,6 +143,14 @@ const session = new GameSession(transport, playerName, {
   get downed() { return session.self.downed; },
   get enemyCount() { return session.entityViews().filter((v) => v.kind !== 0).length; },
   get entityCount() { return session.entityViews().length; },
+  // M4 acceptance hooks
+  get areaId() { return session.areaRef?.areaId ?? 0; },
+  get gadgetBits() { return session.self.gadgetBits; },
+  get sealed() { return session.sealedPassage(session.renderPos(0)); },
+  get areaGadgets() {
+    const a = session.currentArea();
+    return a ? a.gadgets.filter((g) => !session.hasGadget(g.bit)).map((g) => g.pos) : [];
+  },
   // nearest live enemy as [dx, dy, dist] in world space (for the acceptance driver)
   get nearestEnemy() {
     const me = session.renderPos(0);
@@ -300,6 +313,23 @@ function frame(now: number): void {
     labels.update(labelEntries);
   }
 
+  // M4: gadget pickups (glowing Instruments), gate feedback, acquire flourish
+  if (gadgetPickups) {
+    const area = session.currentArea();
+    gadgetPickups.sync(area?.gadgets ?? [], (b) => session.hasGadget(b));
+    gadgetPickups.update(dt);
+  }
+  const gb = session.self.gadgetBits;
+  if (gb !== prevGadgetBits) {
+    const status = session.gadgetStatus();
+    for (let i = 0; i < status.length; i++) {
+      if ((gb & (1 << i)) !== 0 && (prevGadgetBits & (1 << i)) === 0) hud.flashAcquire(status[i]!.name);
+    }
+    prevGadgetBits = gb;
+    hud.setInstruments(status);
+  }
+  hud.setSealed(session.sealedPassage(feetW));
+
   // combat juice
   if (fx) {
     fx.handleEvents(session.drainEvents());
@@ -324,6 +354,7 @@ function frame(now: number): void {
     hud.setNet(session.rttMs, session.reconciliationError);
     hud.setCombat(session.self);
     hud.setRoster(session.rosterNames(), playerName);
+    hud.setInstruments(session.gadgetStatus());
   }
   requestAnimationFrame(frame);
 }

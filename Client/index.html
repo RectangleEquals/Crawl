@@ -67,6 +67,34 @@
       color: #9ab8d8;
     }
     .hud-roster { margin-top: 10px; font-family: "DOS VGA", monospace; font-size: 14px; color: #86a88c; }
+    .hud-instruments { margin-top: 8px; font-family: "DOS VGA", monospace; font-size: 14px; }
+    .instr-label { color: #557a5a; }
+    .instr { margin-right: 8px; }
+    .instr.held { color: #8be0ff; text-shadow: 0 0 6px rgba(102, 224, 255, 0.6); }
+    .instr.locked { color: #55607a; }
+    .hud-sealed {
+      position: fixed;
+      left: 50%; top: 46%;
+      transform: translateX(-50%);
+      display: none;
+      font-family: "Alagard", "DOS VGA", monospace;
+      font-size: 26px;
+      color: #e0a04a;
+      text-shadow: 2px 2px 0 #000;
+      pointer-events: none;
+    }
+    .hud-acquire {
+      position: fixed;
+      left: 50%; top: 34%;
+      transform: translateX(-50%);
+      display: none;
+      font-family: "Alagard", "DOS VGA", monospace;
+      font-size: 30px;
+      color: #b8e6ff;
+      text-shadow: 2px 2px 0 #000, 0 0 12px rgba(102, 224, 255, 0.7);
+      pointer-events: none;
+      transition: opacity 0.6s ease;
+    }
     .hud-prompt {
       position: absolute;
       left: 50%;

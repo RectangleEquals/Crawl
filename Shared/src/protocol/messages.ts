@@ -10,7 +10,7 @@ import { POS_SCALE, VEL_SCALE, YAW_SCALE } from "../sim/constants.js";
 import { EventKind, type CombatEvent } from "../sim/combat/events.js";
 import type { Vec3 } from "../art/mesh.js";
 
-export const PROTOCOL_VERSION = 3;
+export const PROTOCOL_VERSION = 4;
 
 export enum MsgType {
   // client → server
@@ -97,6 +97,7 @@ export interface WelcomeMsg {
   area: AreaRef;
   spawn: Vec3;
   spawnYaw: number;
+  worldSeed: string; // client reconstructs the Reach plan (gates + gadget pickups) from this
 }
 
 export interface ProjectileState {
@@ -119,6 +120,7 @@ export interface SnapshotMsg {
   selfFlags: number; // SelfFlag bits
   selfTagFlags: number;
   abilityReady: number; // bit per ability slot 0..3 (1 = off cooldown & affordable)
+  gadgetBits: number; // held Starwrought Instruments, bit per gadget (M4_GADGET_DEFS order)
   entities: EntityState[];
   events: CombatEvent[];
   projectiles: ProjectileState[];
@@ -188,6 +190,7 @@ export function encode(msg: AnyMsg): Uint8Array {
       writeAreaRef(w, msg.area);
       writeVec3Q(w, msg.spawn);
       writeYawQ(w, msg.spawnYaw);
+      w.str(msg.worldSeed);
       break;
     case MsgType.Snapshot:
       w.u32(msg.tick).u32(msg.lastInputSeq);
@@ -195,7 +198,7 @@ export function encode(msg: AnyMsg): Uint8Array {
       w.i16(Math.round(msg.selfVelZ * VEL_SCALE)).u8(msg.selfGrounded ? 1 : 0);
       w.u16(Math.max(0, Math.round(msg.selfHp))).u16(msg.selfMaxHp);
       w.u16(Math.max(0, Math.round(msg.selfResource))).u16(msg.selfMaxResource);
-      w.u8(msg.selfFlags).u8(msg.selfTagFlags).u8(msg.abilityReady);
+      w.u8(msg.selfFlags).u8(msg.selfTagFlags).u8(msg.abilityReady).u8(msg.gadgetBits);
       w.u8(msg.entities.length);
       for (const e of msg.entities) {
         w.u16(e.id);
@@ -256,7 +259,7 @@ export function decode(data: Uint8Array): AnyMsg {
     case MsgType.Pong:
       return { type, nonce: r.u32() };
     case MsgType.Welcome:
-      return { type, playerId: r.u16(), area: readAreaRef(r), spawn: readVec3Q(r), spawnYaw: readYawQ(r) };
+      return { type, playerId: r.u16(), area: readAreaRef(r), spawn: readVec3Q(r), spawnYaw: readYawQ(r), worldSeed: r.str() };
     case MsgType.Snapshot: {
       const tick = r.u32();
       const lastInputSeq = r.u32();
@@ -270,6 +273,7 @@ export function decode(data: Uint8Array): AnyMsg {
       const selfFlags = r.u8();
       const selfTagFlags = r.u8();
       const abilityReady = r.u8();
+      const gadgetBits = r.u8();
       const nE = r.u8();
       const entities: EntityState[] = [];
       for (let i = 0; i < nE; i++) {
@@ -290,7 +294,7 @@ export function decode(data: Uint8Array): AnyMsg {
       }
       return {
         type, tick, lastInputSeq, selfPos, selfVelZ, selfGrounded,
-        selfHp, selfMaxHp, selfResource, selfMaxResource, selfFlags, selfTagFlags, abilityReady,
+        selfHp, selfMaxHp, selfResource, selfMaxResource, selfFlags, selfTagFlags, abilityReady, gadgetBits,
         entities, events, projectiles,
       };
     }

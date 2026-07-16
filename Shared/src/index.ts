@@ -11,6 +11,8 @@ export { ByteReader, ByteWriter } from "./protocol/codec.js";
 export type { Transport, ClientConnection, ConnectionListener } from "./protocol/transport.js";
 export { buildDemoWorld, chamberOptionsFor } from "./world/demoWorld.js";
 export type { DemoWorld, AreaDef, PortalLink } from "./world/demoWorld.js";
+export { planReach, gadgetBit } from "./world/reachWorld.js";
+export type { ReachPlan, PlanArea, PlanPortal, PlanGadget, ReachPlanOptions } from "./world/reachWorld.js";
 export { GameHost } from "./host/gameHost.js";
 export type { GameHostOptions, GamePublicInfo } from "./host/gameHost.js";
 // combat surface the client renders from (Docs/04, Docs/08)
@@ -19,5 +21,8 @@ export type { CombatEvent } from "./sim/combat/events.js";
 export { TAG_BIT, TAG_KINDS } from "./sim/combat/state.js";
 export type { TagKind } from "./sim/combat/state.js";
 export { KIND_ORDER, getArchetype } from "./data/archetypes.js";
+// gadget (Starwrought Instrument) definitions — Docs/06
+export { M4_GADGET_DEFS, M4_GADGETS, GEAR_SLOT_NOUNS, usesGearSlotNoun } from "./data/gadgets.js";
+export type { GadgetDef } from "./data/gadgets.js";
 // procgen — Archipelago solvability core (Docs/07; M4)
 export * from "./procgen/index.js";

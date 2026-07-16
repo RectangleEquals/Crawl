@@ -44,7 +44,7 @@ describe("protocol codec", () => {
       selfVelZ: -3.21,
       selfGrounded: false,
       selfHp: 84, selfMaxHp: 120, selfResource: 40, selfMaxResource: 100,
-      selfFlags: 2, selfTagFlags: 4, abilityReady: 0b1011,
+      selfFlags: 2, selfTagFlags: 4, abilityReady: 0b1011, gadgetBits: 0b10,
       entities: [
         { id: 500, pos: [3.5, 20.25, 0], yaw: 2.5, anim: 1, kind: 0, hpFrac: 200, stateFlags: 2, tagFlags: 0 },
         { id: 2, pos: [-1.25, 0.5, 4.0], yaw: 0, anim: 2, kind: 1, hpFrac: 128, stateFlags: 5, tagFlags: 8 },
@@ -61,6 +61,7 @@ describe("protocol codec", () => {
     expect(out.selfGrounded).toBe(false);
     expect(out.selfHp).toBe(84);
     expect(out.abilityReady).toBe(0b1011);
+    expect(out.gadgetBits).toBe(0b10);
     expect(out.entities).toHaveLength(2);
     expect(out.entities[1]!.kind).toBe(1);
     expect(out.entities[1]!.tagFlags).toBe(8);

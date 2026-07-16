@@ -19,12 +19,16 @@ export class Hud {
   private readonly resFill: HTMLElement;
   private readonly abilityEls: HTMLElement[];
   private readonly downedEl: HTMLElement;
+  private readonly instrumentsEl: HTMLElement;
+  private readonly sealedEl: HTMLElement;
+  private readonly acquireEl: HTMLElement;
+  private acquireTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(root: HTMLElement) {
     root.innerHTML = `
       <div class="hud-top">
         <div class="hud-title">CRAWLSTAR</div>
-        <div class="hud-sub">M3 · Combat &amp; the Warden</div>
+        <div class="hud-sub">M4 · The Reach Director</div>
         <div class="hud-line"><span id="hud-area" class="hud-area"></span></div>
         <div class="hud-line">
           <span id="hud-mode"></span> · <span id="hud-device"></span> ·
@@ -32,7 +36,10 @@ export class Hud {
         </div>
         <div class="hud-help">WASD move · LMB strike · RMB block · Q ward · E shield-slam · F ground-slam · SPACE jump · SHIFT sprint · V cam</div>
         <div class="hud-roster" id="hud-roster"></div>
+        <div class="hud-instruments" id="hud-instruments"></div>
       </div>
+      <div class="hud-sealed" id="hud-sealed"></div>
+      <div class="hud-acquire" id="hud-acquire"></div>
       <div class="hud-combat">
         <div class="cbar"><div class="cbar-fill hp" id="hud-hp"></div><div class="cbar-text" id="hud-hp-text"></div></div>
         <div class="cbar bulwark"><div class="cbar-fill res" id="hud-res-fill"></div></div>
@@ -54,6 +61,9 @@ export class Hud {
     this.hpText = q("#hud-hp-text");
     this.resFill = q("#hud-res-fill");
     this.downedEl = q("#hud-downed");
+    this.instrumentsEl = q("#hud-instruments");
+    this.sealedEl = q("#hud-sealed");
+    this.acquireEl = q("#hud-acquire");
 
     const abilities = q("#hud-abilities");
     this.abilityEls = ABILITY_NAMES.map((name, i) => {
@@ -88,6 +98,39 @@ export class Hud {
   }
   setPointerLocked(locked: boolean): void {
     this.promptEl.style.display = locked ? "none" : "block";
+  }
+
+  /** Held/unheld Starwrought Instruments (M4). */
+  setInstruments(list: readonly { name: string; held: boolean }[]): void {
+    if (list.length === 0) {
+      this.instrumentsEl.innerHTML = "";
+      return;
+    }
+    const chips = list
+      .map((g) => `<span class="instr ${g.held ? "held" : "locked"}">${g.held ? "✦" : "◇"} ${g.name}</span>`)
+      .join(" ");
+    this.instrumentsEl.innerHTML = `<span class="instr-label">Instruments:</span> ${chips}`;
+  }
+
+  /** Show/clear the "sealed doorway needs Instrument X" hint. */
+  setSealed(name: string | null): void {
+    if (name) {
+      this.sealedEl.textContent = `⊘ SEALED WAY — needs the ${name}`;
+      this.sealedEl.style.display = "block";
+    } else {
+      this.sealedEl.style.display = "none";
+    }
+  }
+
+  /** Brief flourish when an Instrument is acquired. */
+  flashAcquire(name: string): void {
+    this.acquireEl.textContent = `✦ Acquired the ${name} ✦`;
+    this.acquireEl.style.display = "block";
+    this.acquireEl.style.opacity = "1";
+    if (this.acquireTimer) clearTimeout(this.acquireTimer);
+    this.acquireTimer = setTimeout(() => {
+      this.acquireEl.style.opacity = "0";
+    }, 1800);
   }
 
   setCombat(c: SelfCombat): void {

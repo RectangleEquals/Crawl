@@ -21,13 +21,12 @@
 import { Rng } from "../math/rng.js";
 import { ALWAYS, and, have, type Capability, type Rule } from "./logic.js";
 import { assumedFill } from "./fill.js";
+import { M4_GADGETS } from "../data/gadgets.js";
 import type { LocationId, Placement, ProgressionItem, RegionEdge, RegionGraph, RegionId } from "./graph.js";
 
-/** The two M4 launch Instruments (Docs/06 §2 #1–2). */
-export const M4_GADGETS: readonly ProgressionItem[] = [
-  { id: "graviton-tether", grants: "tether" },
-  { id: "gravitic-impeller", grants: "impeller" },
-];
+// The two M4 launch Instruments live in data/gadgets.ts (single source); re-export
+// for the procgen surface so callers can keep importing them from here.
+export { M4_GADGETS };
 
 export interface ReachGrammarParams {
   seed: string | number;

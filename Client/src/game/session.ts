@@ -9,10 +9,10 @@
 
 import {
   AreaPhysics, MsgType, PROTOCOL_VERSION, SUNKEN_PARISH, Buttons, SelfFlag, EntityFlag,
-  chamberOptionsFor, decode, encode, generateChamber, stepCharacter,
+  M4_GADGET_DEFS, chamberOptionsFor, decode, encode, gadgetBit, generateChamber, planReach, stepCharacter,
   type AnyMsg, type AreaRef, type ChamberData, type CharState, type CharacterBody,
-  type CombatEvent, type EntityState, type InputCmd, type ProjectileState,
-  type SnapshotMsg, type Transport, type Vec3,
+  type CombatEvent, type EntityState, type InputCmd, type PlanArea, type ProjectileState,
+  type ReachPlan, type SnapshotMsg, type Transport, type Vec3,
 } from "@crawlstar/shared";
 import { RemoteView, RenderClock } from "../net/interpolation.js";
 
@@ -37,6 +37,7 @@ export interface SelfCombat {
   blocking: boolean;
   tagFlags: number;
   abilityReady: number;
+  gadgetBits: number; // held Starwrought Instruments (M4)
 }
 
 export interface SessionHooks {
@@ -57,8 +58,10 @@ export class GameSession {
   chamber: ChamberData | null = null;
   rttMs = 0;
   yaw = 0;
+  worldSeed = "";
+  plan: ReachPlan | null = null;
 
-  self: SelfCombat = { hp: 1, maxHp: 1, resource: 0, maxResource: 0, downed: false, blocking: false, tagFlags: 0, abilityReady: 0 };
+  self: SelfCombat = { hp: 1, maxHp: 1, resource: 0, maxResource: 0, downed: false, blocking: false, tagFlags: 0, abilityReady: 0, gadgetBits: 0 };
 
   private mirror: AreaPhysics | null = null;
   private body: CharacterBody | null = null;
@@ -89,6 +92,8 @@ export class GameSession {
     switch (msg.type) {
       case MsgType.Welcome:
         this.playerId = msg.playerId;
+        this.worldSeed = msg.worldSeed;
+        this.plan = planReach(msg.worldSeed); // reconstruct gates + gadget pickups locally
         this.enterArea(msg.area, msg.spawn, msg.spawnYaw);
         this.phase = "playing";
         break;
@@ -177,6 +182,7 @@ export class GameSession {
       blocking: (msg.selfFlags & SelfFlag.Blocking) !== 0,
       tagFlags: msg.selfTagFlags,
       abilityReady: msg.abilityReady,
+      gadgetBits: msg.gadgetBits,
     };
 
     // RTT from input echo
@@ -249,6 +255,45 @@ export class GameSession {
 
   entityViews(): readonly EntityView[] {
     return [...this.views.values()];
+  }
+
+  /** The generated plan for the area the player is currently in (M4). */
+  currentArea(): PlanArea | null {
+    if (!this.plan || !this.areaRef) return null;
+    return this.plan.areas.get(this.areaRef.areaId) ?? null;
+  }
+
+  /** Is gadget bit `b` (M4_GADGET_DEFS index) currently held by the expedition? */
+  hasGadget(b: number): boolean {
+    return (this.self.gadgetBits & (1 << b)) !== 0;
+  }
+
+  /** Instrument HUD status (name + whether held). */
+  gadgetStatus(): { name: string; held: boolean }[] {
+    return M4_GADGET_DEFS.map((g, i) => ({ name: g.name, held: this.hasGadget(i) }));
+  }
+
+  /**
+   * If the player (feet in WORLD coords) is standing at a gated doorway they
+   * cannot yet pass, the display name of the Instrument it needs — else null.
+   * The metroidvania "sealed way" hint (Docs/06); also the remembered-lock the
+   * Astrolabe will one day journal.
+   */
+  sealedPassage(feetWorld: Vec3): string | null {
+    const area = this.currentArea();
+    if (!area || !this.chamber) return null;
+    for (const portal of this.chamber.portals) {
+      const link = area.links.get(portal.key);
+      if (!link || link.requiresCap == null) continue;
+      if (this.hasGadget(gadgetBit(link.requiresCap))) continue; // already openable
+      const t = portal.trigger;
+      const p = feetWorld;
+      if (p[0] >= t.min[0] && p[0] <= t.max[0] && p[1] >= t.min[1] && p[1] <= t.max[1]) {
+        const def = M4_GADGET_DEFS.find((g) => g.capability === link.requiresCap);
+        return def ? def.name : link.requiresCap;
+      }
+    }
+    return null;
   }
 
   /** Party members (Wardens) for the HUD roster. */

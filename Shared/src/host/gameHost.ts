@@ -6,15 +6,19 @@
  * extended combat snapshot.
  */
 
-import { buildDemoWorld, type AreaDef, type DemoWorld } from "../world/demoWorld.js";
+import { planReach, gadgetBit, type PlanGadget, type PlanPortal, type ReachPlan } from "../world/reachWorld.js";
+import { generateChamber, type ChamberData } from "../art/chamber.js";
+import { SUNKEN_PARISH } from "../art/style.js";
 import { AreaIsland, type IslandEntity } from "../sim/area.js";
 import { initPhysics } from "../sim/physics.js";
 import { Rng } from "../math/rng.js";
 import { combatThink } from "../sim/ai/brains.js";
 import { makeCombatState, tagFlags } from "../sim/combat/state.js";
 import { getArchetype, kindIndex } from "../data/archetypes.js";
+import { evalRule } from "../procgen/logic.js";
 import type { CombatState } from "../sim/combat/state.js";
 import type { CombatEvent } from "../sim/combat/events.js";
+import type { AreaRef } from "../protocol/messages.js";
 import {
   EntityFlag, MsgType, PROTOCOL_VERSION, SelfFlag, decode, encode,
   type AnyMsg, type EntityState, type InputCmd, type ProjectileState, type ServerMsg,
@@ -47,6 +51,18 @@ interface AiSlot {
   areaId: number;
 }
 
+/** An area instantiated on first entry (chamber + physics island are lazy). */
+interface LoadedArea {
+  ref: AreaRef;
+  chamber: ChamberData;
+  links: Map<string, PlanPortal>;
+  gadgets: PlanGadget[];
+  island: AreaIsland;
+}
+
+/** Distance (XY) within which a player picks up a floating gadget. */
+const GADGET_PICKUP_RADIUS = 1.9;
+
 export interface GameHostOptions {
   seed?: string;
   /** Ally Warden bots spawned beside the player (default 1; 0 = fight solo). */
@@ -72,8 +88,11 @@ function latencyTicks(rttMs: number): number {
 }
 
 export class GameHost {
-  private readonly world: DemoWorld;
-  private readonly islands = new Map<number, AreaIsland>();
+  private readonly plan: ReachPlan;
+  private readonly seed: string;
+  /** Instruments the expedition has collected (world-bound, party-shared — Docs/06). */
+  private readonly heldCaps = new Set<string>();
+  private readonly areaCache = new Map<number, LoadedArea>();
   private readonly sessions = new Map<number, Session>();
   private readonly players = new Map<number, Session>(); // by playerId
   private readonly ai: AiSlot[] = [];
@@ -93,20 +112,25 @@ export class GameHost {
   constructor(listener: ConnectionListener, opts: GameHostOptions = {}) {
     this.log = opts.log ?? (() => undefined);
     const seed = opts.seed ?? "m3-demo";
+    this.seed = seed;
     this.rng = new Rng(seed);
-    this.world = buildDemoWorld(seed);
-    for (const [areaId, def] of this.world.areas) this.islands.set(areaId, new AreaIsland(def.chamber));
+    // M4: the Reach Director generates the whole area/portal world (regions →
+    // gated areas + gadget pickups). Chambers/islands are built lazily per area
+    // on first entry (§area) so startup cost is one chamber, not the whole Reach.
+    this.plan = planReach(seed);
 
     // The ally Warden(s) and the packs are (re)spawned when a player enters an
-    // area (below) — so a lone ally can't farm packs before anyone arrives,
-    // and every session/clear gets a fresh fight. Reach-1 Furrowmouth packs
-    // (Docs/08 §5: 2–4 per pack, Barony-lethal), sizes configurable for testing.
+    // area (below) — so a lone ally can't farm packs before anyone arrives, and
+    // every session/clear gets a fresh fight. Combat lives in the 'area'-role
+    // regions (Sanctums are safe); Reach-1 Furrowmouth packs (Docs/08 §5: 2–4,
+    // Barony-lethal), sizes configurable for testing.
     this.allyCount = Math.max(0, Math.floor(opts.botCount ?? 1));
     this.cooldownScale = Math.max(0.1, opts.cooldownScale ?? 1);
     const enemyCount = Math.max(0, Math.floor(opts.enemyCount ?? 4));
-    this.packs.set(this.world.startAreaId, buildPack(enemyCount));
-    this.packs.set(2, buildPack(Math.min(2, enemyCount)));
-    this.log(`config: allies=${this.allyCount} enemies=${enemyCount} cooldownScale=${this.cooldownScale}`);
+    for (const [areaId, pa] of this.plan.areas) {
+      if (pa.role === "area") this.packs.set(areaId, buildPack(enemyCount));
+    }
+    this.log(`config: allies=${this.allyCount} enemies=${enemyCount} cooldownScale=${this.cooldownScale} areas=${this.plan.areas.size}`);
 
     listener.onConnection((conn) => this.onConnection(conn));
   }
@@ -122,18 +146,18 @@ export class GameHost {
    */
   publicInfo(): GamePublicInfo {
     const areas: GamePublicInfo["areas"] = [];
-    for (const [id, def] of this.world.areas) {
-      const island = this.islands.get(id);
+    for (const [id, pa] of this.plan.areas) {
+      const loaded = this.areaCache.get(id);
       let enemies = 0;
       let allies = 0;
-      if (island) {
-        for (const e of island.entities.values()) {
+      if (loaded) {
+        for (const e of loaded.island.entities.values()) {
           if (e.combat?.team === 1) enemies += 1;
           else if (e.isBot && e.combat?.team === 0) allies += 1;
         }
       }
       const players = [...this.sessions.values()].filter((s) => s.areaId === id && s.entity).length;
-      areas.push({ id, name: def.ref.name, players, enemies, allies });
+      areas.push({ id, name: pa.ref.name, players, enemies, allies });
     }
     const players = [...this.sessions.values()]
       .filter((s) => s.entity)
@@ -143,18 +167,33 @@ export class GameHost {
         tick: this.tick,
         uptimeSec: Math.round((Date.now() - this.startedAt) / 1000),
         players: players.length,
-        areas: this.world.areas.size,
+        areas: this.plan.areas.size,
       },
       areas,
       players,
     };
   }
 
-  private area(areaId: number): { def: AreaDef; island: AreaIsland } {
-    const def = this.world.areas.get(areaId);
-    const island = this.islands.get(areaId);
-    if (!def || !island) throw new Error(`unknown area ${areaId}`);
-    return { def, island };
+  /** Load an area on demand: generate its chamber + physics island once, cache. */
+  private area(areaId: number): LoadedArea {
+    const cached = this.areaCache.get(areaId);
+    if (cached) return cached;
+    const pa = this.plan.areas.get(areaId);
+    if (!pa) throw new Error(`unknown area ${areaId}`);
+    const chamber = generateChamber(SUNKEN_PARISH, pa.ref.seed, { roofHoles: pa.ref.roofHoles, waterLevel: pa.ref.waterLevel });
+    const loaded: LoadedArea = { ref: pa.ref, chamber, links: pa.links, gadgets: pa.gadgets, island: new AreaIsland(chamber) };
+    this.areaCache.set(areaId, loaded);
+    return loaded;
+  }
+
+  /** Held Instruments as a wire bitmask (Snapshot.gadgetBits). */
+  private gadgetBitsValue(): number {
+    let bits = 0;
+    for (const cap of this.heldCaps) {
+      const bit = gadgetBit(cap);
+      if (bit >= 0) bits |= 1 << bit;
+    }
+    return bits;
   }
 
   private makeCombat(kind: string, ai = false): CombatState {
@@ -165,9 +204,9 @@ export class GameHost {
 
   /** Respawn the area's pack if it currently holds no living enemies. */
   private ensurePopulated(areaId: number): void {
-    const island = this.islands.get(areaId);
     const pack = this.packs.get(areaId);
-    if (!island || !pack) return;
+    if (!pack) return;
+    const island = this.area(areaId).island;
     if ([...island.entities.values()].some((e) => e.combat?.team === 1)) return;
     for (const [kind, pos] of pack) {
       const id = this.nextEnemyId++;
@@ -179,8 +218,7 @@ export class GameHost {
   /** Ensure `allyCount` ally Warden bots exist in the area, near the player. */
   private ensureAlly(areaId: number, feet: [number, number, number]): void {
     if (this.allyCount <= 0) return;
-    const island = this.islands.get(areaId);
-    if (!island) return;
+    const island = this.area(areaId).island;
     const have = [...island.entities.values()].filter((e) => e.isBot && e.combat?.team === 0).length;
     for (let i = have; i < this.allyCount; i++) {
       const id = this.nextAllyId++;
@@ -249,12 +287,12 @@ export class GameHost {
   private acceptSession(conn: ClientConnection, rawName: string): void {
     const name = (rawName || "Pilgrim").slice(0, 24);
     const playerId = this.nextPlayerId++;
-    const areaId = this.world.startAreaId;
-    const { def, island } = this.area(areaId);
+    const areaId = this.plan.startAreaId;
+    const loaded = this.area(areaId);
     this.ensurePopulated(areaId); // fresh pack if the area was cleared
     const jitter = (playerId % 5) * 0.7 - 1.4;
-    const feet = [def.chamber.spawn.position[0] + jitter, def.chamber.spawn.position[1], def.chamber.spawn.position[2]] as const;
-    const entity = island.addEntity(playerId, name, false, feet, def.chamber.spawn.yaw, this.makeCombat("warden"));
+    const feet = [loaded.chamber.spawn.position[0] + jitter, loaded.chamber.spawn.position[1], loaded.chamber.spawn.position[2]] as const;
+    const entity = loaded.island.addEntity(playerId, name, false, feet, loaded.chamber.spawn.yaw, this.makeCombat("warden"));
     this.ensureAlly(areaId, [feet[0] + 1.6, feet[1] + 1.0, feet[2]]);
 
     const session: Session = {
@@ -265,8 +303,8 @@ export class GameHost {
     this.sessions.set(conn.id, session);
     this.players.set(playerId, session);
 
-    this.send(conn, { type: MsgType.Welcome, playerId, area: def.ref, spawn: feet, spawnYaw: def.chamber.spawn.yaw });
-    this.sendRosterTo(conn, island, playerId);
+    this.send(conn, { type: MsgType.Welcome, playerId, area: loaded.ref, spawn: feet, spawnYaw: loaded.chamber.spawn.yaw, worldSeed: this.seed });
+    this.sendRosterTo(conn, loaded.island, playerId);
     this.broadcastArea(areaId, { type: MsgType.EntityJoin, id: playerId, name, isBot: false }, playerId);
     this.log(`join: ${name} (#${playerId})`);
   }
@@ -303,25 +341,25 @@ export class GameHost {
 
     const to = this.area(targetAreaId);
     const portal = to.island.portalByKey(targetPortalKey);
-    const spawn = portal ? portal.spawn : to.def.chamber.spawn.position;
-    const spawnYaw = portal ? portal.spawnYaw : to.def.chamber.spawn.yaw;
-    this.send(session.conn, { type: MsgType.TransitionBegin, area: to.def.ref, spawn, spawnYaw });
+    const spawn = portal ? portal.spawn : to.chamber.spawn.position;
+    const spawnYaw = portal ? portal.spawnYaw : to.chamber.spawn.yaw;
+    this.send(session.conn, { type: MsgType.TransitionBegin, area: to.ref, spawn, spawnYaw });
   }
 
   private completeTransition(session: Session): void {
     const pending = session.pendingTransition;
     if (!pending) return;
     session.pendingTransition = null;
-    const { def, island } = this.area(pending.targetAreaId);
-    const portal = island.portalByKey(pending.targetPortalKey);
-    const spawn = portal ? portal.spawn : def.chamber.spawn.position;
-    const spawnYaw = portal ? portal.spawnYaw : def.chamber.spawn.yaw;
+    const loaded = this.area(pending.targetAreaId);
+    const portal = loaded.island.portalByKey(pending.targetPortalKey);
+    const spawn = portal ? portal.spawn : loaded.chamber.spawn.position;
+    const spawnYaw = portal ? portal.spawnYaw : loaded.chamber.spawn.yaw;
     session.areaId = pending.targetAreaId;
     this.ensurePopulated(pending.targetAreaId);
-    session.entity = island.addEntity(session.playerId, session.name, false, spawn, spawnYaw, this.makeCombat("warden"));
+    session.entity = loaded.island.addEntity(session.playerId, session.name, false, spawn, spawnYaw, this.makeCombat("warden"));
     this.ensureAlly(pending.targetAreaId, [spawn[0] + 1.6, spawn[1] + 1.0, spawn[2]]);
     session.lastAppliedSeq = 0;
-    this.sendRosterTo(session.conn, island, session.playerId);
+    this.sendRosterTo(session.conn, loaded.island, session.playerId);
     this.broadcastArea(session.areaId, { type: MsgType.EntityJoin, id: session.playerId, name: session.name, isBot: false }, session.playerId);
     this.send(session.conn, { type: MsgType.TransitionGo });
   }
@@ -349,7 +387,7 @@ export class GameHost {
     if (this.budgetTimer) clearInterval(this.budgetTimer);
     this.timer = null;
     this.budgetTimer = null;
-    for (const island of this.islands.values()) island.dispose();
+    for (const a of this.areaCache.values()) a.island.dispose();
   }
 
   private latencyOf(entityId: number): number {
@@ -380,36 +418,55 @@ export class GameHost {
 
     // 2. AI inputs (allies + enemies), same InputCmd path
     for (const slot of this.ai) {
-      const island = this.islands.get(slot.areaId);
+      const island = this.areaCache.get(slot.areaId)?.island;
       const entity = island?.entities.get(slot.id);
       if (!island || !entity) continue;
       island.applyCmd(entity, combatThink(entity, island, now));
     }
 
-    // 3. physics
-    for (const island of this.islands.values()) island.step();
+    // 3. physics (only instantiated areas — unvisited areas stay frozen)
+    for (const a of this.areaCache.values()) a.island.step();
 
     // 4. combat, per island
     const eventsByArea = new Map<number, CombatEvent[]>();
-    for (const [areaId, island] of this.islands) {
+    for (const [areaId, a] of this.areaCache) {
       const events: CombatEvent[] = [];
-      const res = island.tickCombat(now, (id) => this.latencyOf(id), events);
+      const res = a.island.tickCombat(now, (id) => this.latencyOf(id), events);
       eventsByArea.set(areaId, events);
       for (const deadId of res.removed) {
-        const idx = this.ai.findIndex((a) => a.id === deadId);
+        const idx = this.ai.findIndex((s) => s.id === deadId);
         if (idx >= 0) this.ai.splice(idx, 1);
       }
     }
 
-    // 5. portals (players only, not while downed)
+    // 4b. gadget pickups: walking over an uncollected Instrument grants it to the
+    // whole expedition (world-bound, party-shared). gadgetBits carries it to all.
+    for (const session of this.sessions.values()) {
+      const entity = session.entity;
+      if (!entity) continue;
+      for (const g of this.area(session.areaId).gadgets) {
+        if (this.heldCaps.has(g.cap)) continue;
+        const dx = entity.state.pos[0] - g.pos[0];
+        const dy = entity.state.pos[1] - g.pos[1];
+        if (Math.hypot(dx, dy) <= GADGET_PICKUP_RADIUS) {
+          this.heldCaps.add(g.cap);
+          this.log(`gadget: ${session.name} collected ${g.itemId}`);
+        }
+      }
+    }
+
+    // 5. portals (players only, not while downed) — gated doorways stay shut
+    // until the expedition holds the required Instrument (Docs/06 metroidvania).
     for (const session of this.sessions.values()) {
       const entity = session.entity;
       if (!entity || session.pendingTransition || entity.combat?.downed) continue;
-      const { def, island } = this.area(session.areaId);
-      const portal = island.portalAt(entity.state.pos);
+      const loaded = this.area(session.areaId);
+      const portal = loaded.island.portalAt(entity.state.pos);
       if (!portal) continue;
-      const link = def.links.get(portal.key);
-      if (link) this.beginTransition(session, link.targetAreaId, link.targetPortalKey);
+      const link = loaded.links.get(portal.key);
+      if (link && evalRule(link.requires, this.heldCaps)) {
+        this.beginTransition(session, link.targetAreaId, link.targetPortalKey);
+      }
     }
 
     // 6. snapshots + events, per client
@@ -430,7 +487,7 @@ export class GameHost {
   }
 
   private sendSnapshot(session: Session, entity: IslandEntity, events: CombatEvent[]): void {
-    const island = this.area(session.areaId).island;
+    const island = this.areaCache.get(session.areaId)?.island ?? this.area(session.areaId).island;
     const c = entity.combat!;
     const entities: EntityState[] = [];
     for (const other of island.entities.values()) {
@@ -463,6 +520,7 @@ export class GameHost {
       selfResource: c.resource, selfMaxResource: c.maxResource,
       selfFlags, selfTagFlags: tagFlags(c),
       abilityReady: abilityReadyBits(c, this.tick),
+      gadgetBits: this.gadgetBitsValue(),
       entities, events, projectiles,
     });
   }
