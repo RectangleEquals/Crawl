@@ -109,7 +109,8 @@ Every criterion from the original brief and subsequent design feedback, mapped t
 | F25 | Chat channels: `#` global · `$` trade (Sanctum-only) · `>` world (game-server-wide) · `%` party · `@account` private (region-wide) | [09](09-modes-social.md) §11, [Multiplayer/architecture.md](Multiplayer/architecture.md) §4 |
 | F26 | Game-server connection cap (~16: party ≤5 + ~11–15 visitors), figurative pending load testing; all connections in the authoritative physics sim | [03](03-networking.md) §8, [09](09-modes-social.md) §12 |
 | F27 | Not-all-flat geometry: **PS2-tier** environments/props (curves, bevels, radial forms, protruding detail) + **N64-tier** characters, under modern lighting; PBR-ish surface maps (normal/height/AO) blend retro+modern; crystal/prop variation; Director optional-prop decoration layer | [01](01-art-direction.md) §1, §2.4–2.5, §5, §7 |
-| F28 | UI must stay legible through the post chain: all UI native-res; **world-space 3D UI** (nameplates, HP bars, markers) projected as a native-res overlay, never in-scene sprites the downscale/dither would smear | [01](01-art-direction.md) §3.1, [02](02-tech-architecture.md) §7 |
+| F28 | UI must stay legible through the post chain: all UI native-res, outside the *world* post chain; **world-space 3D UI** (nameplates, HP bars, markers) projected & composited native-res, never in-scene sprites the downscale/dither would smear | [01](01-art-direction.md) §3.1, [02](02-tech-architecture.md) §7 |
+| F29 | UI mechanism: DOM overlay is an **interim** stopgap only — the target is a **dedicated in-pipeline UI render layer** (native-res UI pass; per-element post policy mixing clarity & opt-in bloom/retro; SDF/atlas text anchored in sprite panels; render-target minimap/automap; GPU-accelerated; portable beyond the browser). Build at M5 | [01](01-art-direction.md) §3.2, [02](02-tech-architecture.md) §7, [11](11-roadmap.md#art-fidelity-upgrade-path) |
 
 ---
 

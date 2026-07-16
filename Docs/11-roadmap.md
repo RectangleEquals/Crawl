@@ -17,14 +17,16 @@ and extensible later.
 
 The [art direction](01-art-direction.md) sets a higher bar than the M1–M3 prototype kit hits: PS2-tier
 environment geometry (curves, bevels, radial forms, protruding detail), N64-tier characters, PBR-ish surface
-maps (normal/height/AO), a Director decoration layer, and always-legible native-res UI ([01](01-art-direction.md)
-§2.4–2.5, §3.1). We **don't** retrofit all of that at once — we land each capability at the milestone where it
-first pays for itself. The trigger is always *"are we about to mass-produce or hand-author against the old
-fidelity?"* — upgrade the engine/generator support **just before** that, never after.
+maps (normal/height/AO), a Director decoration layer, always-legible native-res UI, and — longer-term — a
+**dedicated in-pipeline UI render layer** to replace the interim DOM overlays ([01](01-art-direction.md)
+§2.4–2.5, §3.1–3.2). We **don't** retrofit all of that at once — we land each capability at the milestone where
+it first pays for itself. The trigger is always *"are we about to mass-produce or hand-author (or DOM-hack)
+against the old fidelity?"* — upgrade the engine/generator/UI support **just before** that, never after.
 
 | Capability | Lands at | Why then |
 |---|---|---|
-| **Native-res 3D-UI overlay** (nameplates, HP bars legible through the post chain, [01](01-art-direction.md) §3.1) | **Done (pre-M4)** | Cheap, isolated, and the blurry-nameplate bug was already visible in M3 — no reason to carry it forward |
+| **Interim native-res UI overlay** (DOM: nameplates, HP bars legible through the post chain, [01](01-art-direction.md) §3.1) | **Done (pre-M4)** | Cheap, isolated stopgap; the blurry-nameplate bug was already visible in M3. **DOM is not the destination** — see the UI-layer row below |
+| **In-pipeline UI render layer** — native-res UI pass with per-element post policy (clarity vs opt-in bloom/retro), SDF/atlas text in sprite panels, render-target minimap/automap, focus-graph layout; migrate the interim DOM overlays onto it ([01](01-art-direction.md) §3.2) | **M5** | M5 is the first heavy-UI milestone (paperdoll/inventory/tooltips/loot filter/stash) — DOM can't do render-target minimaps, in-panel text anchoring, or per-element GPU post, and won't port beyond the browser. Build the substrate here so M6 (Sanctum/Obelisk/automap) and M7 (boss bars) sit on it, not on more DOM |
 | **Geometry fidelity tiers in style files + `art:validate`**; **kit generator emits PS2-tier forms** (lathe/bevel/radial) + **normal + AO** map support in the renderer | **M4** | M4's grid embedding is the **first time the kit is stitched into real multi-room areas** ([07](07-procgen.md) §5) — the first time flat boxes are seen at scale, and the last cheap moment to change the kit before content multiplies. Land it with M4's embedding or as a short pass right after; **do not gate M4's procgen `Accept:` on it.** |
 | **Full surface-map pipeline** (add **height/parallax**, roughness/metallic), **Director decoration layer** (vines/roots/debris), **N64-tier character handcraft begins** | **M6** | M6 adds the **second biome + families** — the moment biome variety and prop density scale, so the map pipeline and decoration scatter stop being polish and start being cohesion. First Phase-B recipe cards ([01](01-art-direction.md) §5) can begin against hero props here |
 | **Hero-asset handcraft** (classes → bosses → hero props → kit silhouettes, [01](01-art-direction.md) §5 priority order) + the [01](01-art-direction.md) §7 look-acceptance pass on the slice | **M9** | Vertical slice is the showcase; heroes get the guided Blender/PS treatment against final palettes/budgets |
@@ -83,8 +85,13 @@ backtracking.
 Item bases + paperdoll/inventory UI (gamepad focus-graph parity); rarities through Starmarked; affix pools
 + tiers; loot filter + rarity beams; first five currencies + Irradiation; party chest, stash, vendors;
 gravemark + XP-debt death loop ([09](09-modes-social.md) §6).
+**Art-fidelity (see [upgrade path](#art-fidelity-upgrade-path)):** paperdoll/inventory/tooltips are the first
+heavy UI, so **build the in-pipeline UI render layer** here ([01](01-art-direction.md) §3.2) — native-res UI
+pass, per-element post policy, SDF/atlas text in sprite panels, focus-graph layout — and **migrate the interim
+DOM overlays** (`worldLabels.ts`, damage numbers) onto it. Don't extend the DOM stopgap into real screens.
 **Accept:** a 2-hour session produces sensible drops/crafts at Reach-1/2 rates; a wipe → recovery run →
-gravemark reclaim works end-to-end.
+gravemark reclaim works end-to-end. **UI renders through the new layer** (inventory, tooltips, migrated
+nameplates) crisp at native res with gamepad + touch parity.
 
 ## M6 — Depth (Reaches 2–3, Omens, Sanctum)
 Rest Sanctum area with sleep/save/resume, respec altar, waygates ([09](09-modes-social.md) §4,
@@ -103,7 +110,9 @@ Gate sealing/unsealing works with respec costs.
 Boss composer (3 archetypes × 6 modules incl. one gadget-locked — [08](08-enemies-bosses.md) §6) + arena
 generation; boss rewards + first-kill passive points; Meridian Peddler with courier banking + Gravewarrant
 + gambles ([09](09-modes-social.md) §7); Stillwater Phial revive flow; difficulty pacing curve wired to
-Reach index.
+Reach index. **Art-fidelity (see [upgrade path](#art-fidelity-upgrade-path)):** the **Dark-Souls-style boss
+HP bar** (world-anchored name + segmented bar, possibly with an opt-in bloom on phase-shift) is built on the
+M5 in-pipeline UI layer ([01](01-art-direction.md) §3.2) — the first showcase of per-element UI post.
 **Accept:** Sanctum → Omens → 5 areas → composed boss → Sanctum, repeatable for 3 Reaches, with banking
 tension demonstrably shaping player behavior (telemetry: courier use, gravemark losses).
 **Stress test (first entity-density checkpoint — [02](02-tech-architecture.md) §4.3):** headless soak

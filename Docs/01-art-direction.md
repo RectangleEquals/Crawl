@@ -140,26 +140,74 @@ rules. They exist to break up repetition and *surprise*.
 - Rarity colors ([05-items-loot-affixes.md](05-items-loot-affixes.md)): Common white · Forged blue ·
   Runed gold · Starmarked violet · Singular **gloam-green with animated dither shimmer**.
 
-### 3.1 Legibility law: the post chain must never eat the UI
+### 3.1 Legibility law: the world post chain must never eat the UI
 
 The PSX post chain (internal-res render target → vertex snap → affine warp → Bayer dither → nearest upscale,
-§2.2) is for the *world*. It must **never** be allowed to render UI illegible. The rule:
+§2.2) is for the **world**. It must **never** be allowed to render UI illegible. The invariant:
 
-- **All UI renders at native resolution**, outside the internal-res post chain — flat 2D HUD *and*
+- **All UI renders at native resolution, outside the *world's* internal-res post chain** — flat 2D HUD *and*
   world-anchored 3D UI alike. UI may *look* pixelated (bitmap fonts, hard edges, palette colors, a light
   ordered-dither flavor is fine) but must always stay **crisp and readable**. Text especially: **readability
   beats purism, every time.**
-- **World-space / "3D" UI** — nameplates, HP/resource bars, floating damage numbers, interaction prompts,
-  gadget-lock markers, quest/Astrolabe pings — are **projected from world space and drawn as a native-res
-  overlay** (DOM or a dedicated native-res pass), **not** as in-scene sprites/meshes that get downscaled and
-  dithered into a smear. They track their anchor entity, scale mildly with distance (clamped to a legible
-  minimum) and fade out beyond a range so a far room doesn't clutter — but they are never blurred, re-diced,
-  or vertex-snapped. (Implementation: `Client/game/worldLabels.ts`; same projection idiom as the damage-number
-  overlay. Anti-pattern to avoid: nameplates as `CanvasTexture` sprites inside the 3D scene — that was the
-  original blurry/dithered/illegible-until-close bug.)
+- **World-space / "3D" UI** — nameplates, HP/resource bars, boss bars, floating damage numbers, interaction
+  prompts, gadget-lock markers, quest/Astrolabe pings — is **projected from world space and composited at
+  native resolution**, never rendered as in-scene sprites/meshes that the downscale + dither would smear. It
+  tracks its anchor entity, scales mildly with distance (clamped to a legible minimum) and fades out beyond a
+  range — but is never blurred, re-diced, or vertex-snapped.
 - **Diegetic exceptions** are deliberate: signage, screens, and props that are meant to live *in* the world
-  (a rune-lit door glyph, a merchant's price board) *do* go through the post chain — because they are world,
-  not UI. If the player needs to read it to play, it's UI and renders native; if it's set dressing, it's world.
+  (a rune-lit door glyph, a merchant's price board) *do* go through the world post chain — because they are
+  world, not UI. If the player needs to read it to play, it's UI and renders native; if it's set dressing,
+  it's world.
+
+The *invariant is the native-res compositing and legibility* — **not** the specific mechanism. There are two:
+
+**Interim (now, through ~M4): a DOM overlay.** Nameplates/HP bars/damage numbers project world→screen and
+position absolutely-placed DOM elements above the canvas (`Client/game/worldLabels.ts`, `combatFx.ts`; `.wl-*`
+/ `.fx-*` CSS). This is a deliberate stopgap that unblocks basic testing — cheap, crisp, good enough while UI
+is just labels + a simple HUD. (The original bug it replaced: nameplates as `CanvasTexture` sprites *inside*
+the 3D scene → smeared illegible by the post chain.) The DOM approach **does not scale** to the real UI to
+come (§3.2 explains why) and is **not** the destination.
+
+### 3.2 Target: an in-pipeline UI render layer (build at M5)
+
+Once real UI arrives — paperdoll/inventory grids, loot tooltips, Dark-Souls-style boss bars, the Sanctum &
+Obelisk screens, the Astrolabe **minimap/automap**, radial gadget menu, sprite/texture panels, and FX that
+*want* effects (a Singular's emissive shimmer that should bloom, a diegetic CRT panel that should scanline) —
+DOM is the wrong tool: it can't sample a render-target minimap, can't anchor text precisely inside a scaling
+sprite panel, can't opt individual elements into GPU post, fights the game's own action-map/focus-graph, costs
+layout/reflow on the CPU instead of the GPU, and is browser-locked (a barrier if CrawlStar ever leaves the
+browser for a native shell). So the destination is a **dedicated UI render layer inside the pipeline**:
+
+- **A UI pass composited after the world post chain, at native canvas resolution.** A screen-space
+  **orthographic** camera draws 2D UI; world-anchored UI (nameplates, boss bars, markers) is placed by an
+  in-engine world→screen projection. UI never enters the internal-res world target.
+- **Per-element post policy — the key capability.** The UI compositor owns *its own* optional passes so
+  elements choose their treatment: (a) **crisp** (default — menus, text, bars: no world post, GPU-filtered for
+  legibility); (b) **opt-in FX** (bloom on a rarity glow, a soft dither/scanline "retro filter" on a diegetic
+  element); (c) **anchored-in-world** (billboarded but native-res). Clarity and retro mix *deliberately*,
+  per element — not globally.
+- **Text:** GPU-rendered from **SDF/MSDF font atlases** (crisp at any scale, cheap, anchorable to sub-pixel
+  positions inside panels) — pixel/bitmap fonts shipped as **nearest-filtered glyph atlases** keep the
+  retro-but-legible look. Text can be parented into sprite/9-slice panels so a boss name sits correctly inside
+  its frame as the frame scales.
+- **Sprites & panels:** textured quads, 9-slice frames, and sprite atlases authored through the same art
+  pipeline (palette discipline, §4). Icons/frames are assets, not CSS.
+- **Minimap / automap:** rendered to its **own render target** (top-down ortho camera over discovered
+  area-graph geometry, [07-procgen.md](07-procgen.md)) and sampled as a UI texture — *inherently* in-pipeline,
+  impossible in DOM.
+- **Layout & input:** a lightweight retained/immediate UI over the quads, wired to the existing action-map +
+  **focus-graph** ([02-tech-architecture.md](02-tech-architecture.md) §6) so gamepad/touch parity is native,
+  not bolted on.
+- **Portability:** an in-engine UI layer (WebGL today) ports to a native backend (wgpu / OpenGL / Vulkan)
+  far more cleanly than DOM — it keeps the UI a first-class part of the renderer.
+
+Candidate building blocks to evaluate when M5 starts (free/open, license-checked): **SDF text** via
+troika-three-text or a custom `msdfgen`/`msdf-atlas-gen` atlas; **panels/quads** via three-mesh-ui or a custom
+textured-quad + sprite-atlas layer; **minimap** via a second scene + ortho camera to a `WebGLRenderTarget`;
+**selective post** via a small dedicated `EffectComposer`/pass set the UI compositor owns. Genuinely
+document-flow needs (accessibility, text-entry fields) may stay DOM by choice; **game UI lives in the
+pipeline.** Migrate the interim `worldLabels.ts` / `combatFx` overlays onto this layer when it lands
+([11-roadmap.md](11-roadmap.md#art-fidelity-upgrade-path)).
 
 ---
 

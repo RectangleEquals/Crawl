@@ -209,11 +209,19 @@ NOT first in a GC'd sim):
   cameras share the same sim-side aim model so the swap is purely presentational.
 - **Prediction:** local player movement + gadget traversal are predicted and reconciled
   ([03](03-networking.md) §4); everything else renders from interpolated authoritative snapshots.
-- **UI:** HTML/CSS overlay (DOM) — free text layout/accessibility, styled to the retro spec, driven by the
-  focus-graph for gamepad parity. **World-space UI** (nameplates, HP bars, damage numbers, markers) is
-  projected from world space and drawn as a **native-res overlay outside the post chain** — never as in-scene
-  sprites, which the internal-res downscale + dither would render illegible ([01](01-art-direction.md) §3.1;
-  `Client/game/worldLabels.ts`, `combatFx.ts`).
+- **UI — invariant then mechanism:** the fixed rule is that UI composites at **native resolution, outside the
+  *world* post chain**, and stays legible ([01](01-art-direction.md) §3.1). Two mechanisms across the roadmap:
+  - **Interim (through ~M4):** an HTML/CSS **DOM overlay** — nameplates/HP bars/damage numbers projected
+    world→screen (`Client/game/worldLabels.ts`, `combatFx.ts`), plus the flat HUD/plates. A deliberate stopgap
+    while UI is just labels + a simple HUD; cheap and crisp, but browser-locked and unable to do render-target
+    minimaps, in-panel text anchoring, or per-element post.
+  - **Target (build at M5, [01](01-art-direction.md) §3.2):** a **dedicated in-pipeline UI render layer** — a
+    native-res UI pass composited after the world post chain (screen-space ortho camera + in-engine
+    world→screen projection for anchored UI), with a **per-element post policy** (crisp by default; opt-in
+    bloom/retro filter for FX-y elements), **SDF/MSDF or nearest-atlas text** anchorable inside sprite/9-slice
+    panels, a **render-target minimap/automap**, and layout wired to the action-map + focus-graph for
+    gamepad/touch parity. GPU-accelerated and portable to a native backend (wgpu/GL/Vulkan) far better than
+    DOM. The interim overlays migrate onto this layer when it lands.
 - **Asset loading:** GLTF/PNG produced by `art-gen` at build time; areas reference kit pieces by id, so an
   area download is a compact descriptor, not geometry ([03](03-networking.md) §5).
 
