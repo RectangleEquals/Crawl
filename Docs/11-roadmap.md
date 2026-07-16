@@ -11,6 +11,30 @@ and extensible later.
 
 ---
 
+## Art-fidelity upgrade path
+
+> Prototype art first; upgrade the *look* exactly when it starts costing more to defer than to do.
+
+The [art direction](01-art-direction.md) sets a higher bar than the M1–M3 prototype kit hits: PS2-tier
+environment geometry (curves, bevels, radial forms, protruding detail), N64-tier characters, PBR-ish surface
+maps (normal/height/AO), a Director decoration layer, and always-legible native-res UI ([01](01-art-direction.md)
+§2.4–2.5, §3.1). We **don't** retrofit all of that at once — we land each capability at the milestone where it
+first pays for itself. The trigger is always *"are we about to mass-produce or hand-author against the old
+fidelity?"* — upgrade the engine/generator support **just before** that, never after.
+
+| Capability | Lands at | Why then |
+|---|---|---|
+| **Native-res 3D-UI overlay** (nameplates, HP bars legible through the post chain, [01](01-art-direction.md) §3.1) | **Done (pre-M4)** | Cheap, isolated, and the blurry-nameplate bug was already visible in M3 — no reason to carry it forward |
+| **Geometry fidelity tiers in style files + `art:validate`**; **kit generator emits PS2-tier forms** (lathe/bevel/radial) + **normal + AO** map support in the renderer | **M4** | M4's grid embedding is the **first time the kit is stitched into real multi-room areas** ([07](07-procgen.md) §5) — the first time flat boxes are seen at scale, and the last cheap moment to change the kit before content multiplies. Land it with M4's embedding or as a short pass right after; **do not gate M4's procgen `Accept:` on it.** |
+| **Full surface-map pipeline** (add **height/parallax**, roughness/metallic), **Director decoration layer** (vines/roots/debris), **N64-tier character handcraft begins** | **M6** | M6 adds the **second biome + families** — the moment biome variety and prop density scale, so the map pipeline and decoration scatter stop being polish and start being cohesion. First Phase-B recipe cards ([01](01-art-direction.md) §5) can begin against hero props here |
+| **Hero-asset handcraft** (classes → bosses → hero props → kit silhouettes, [01](01-art-direction.md) §5 priority order) + the [01](01-art-direction.md) §7 look-acceptance pass on the slice | **M9** | Vertical slice is the showcase; heroes get the guided Blender/PS treatment against final palettes/budgets |
+
+Everything here is data-driven (style files + generators), so a later biome automatically inherits the
+fidelity of whatever pass is current. Deferred items live in `.claude/BACKLOG.md` (Gameplay/client + a new
+art-fidelity block); the per-milestone one-liners below fold each into its milestone's scope.
+
+---
+
 ## M1 — Scaffold & the Look
 Monorepo (`Client/`, `Server/`, `Shared/` — [02](02-tech-architecture.md) §2), Vite + TS strict + Vitest;
 first art-gen output (one biome's kit + textures via style constraint file); PSX-modern render pipeline
@@ -46,6 +70,11 @@ Region graph grammar + assumed fill + reachability regression ([07](07-procgen.m
 lock types (Tether gaps, Impeller ledges); grid embedding with the M1 kit; Starwrought Vault set-piece; the
 two Instruments with charges + radial menu + Astrolabe with remembered locks ([06](06-gadgets.md));
 generation horizon + Obelisk-triggered whole-Reach jobs (Omens stubbed).
+**Art-fidelity (see [upgrade path](#art-fidelity-upgrade-path)):** because grid embedding is the first time the
+kit is stitched into real multi-room areas, this is the trigger to add **geometry fidelity tiers** to the
+style files + `art:validate`, have the **kit generator emit PS2-tier forms** (lathe/bevel/radial, not raw
+boxes), and add **normal + AO** map support to the renderer ([01](01-art-direction.md) §2.4–2.5). Land it with
+embedding or as a short pass right after — **not** a gate on the procgen accept below.
 **Accept:** 1,000 seeded Reaches generate with zero solver failures in CI; a bot party completes a full
 Reach headlessly; a human party crosses a gadget-gated golden path and opens one remembered lock by
 backtracking.
@@ -62,6 +91,11 @@ Rest Sanctum area with sleep/save/resume, respec altar, waygates ([09](09-modes-
 [10](10-persistence.md) §4); Waymark Obelisk with real Omens (Minor/Major tiers, mandatory-pick rules);
 second biome + families; locks 3–6 with their Instruments; Arcanist + Reaver classes; passive trees with
 Keystone Gates.
+**Art-fidelity (see [upgrade path](#art-fidelity-upgrade-path)):** the second biome is the cue to complete the
+**full surface-map pipeline** (add height/parallax + roughness/metallic), turn on the **Director decoration
+layer** (vines/roots/shard-debris scatter), and **begin N64-tier character handcraft** + the first Phase-B
+recipe cards ([01](01-art-direction.md) §2.5, §5) — biome variety is where map/decoration cohesion stops being
+polish.
 **Accept:** save-and-resume a 3-Reach expedition across server restart; Omens visibly reshape a Reach;
 Gate sealing/unsealing works with respec costs.
 
@@ -94,8 +128,10 @@ sets the per-region connection cap ([03](03-networking.md) §8).
 ## M9 — Vertical Slice
 Content fill to 6 biomes / 8 boss archetypes / all 11 locks + Instruments; remaining tags and currencies;
 Singulars set; hardcore flag; Dire Omens + final-Reach double-mandatory rule; performance/persistence
-hardening; first Phase-B art recipe cards ([01](01-art-direction.md) §5) authored against the slice's
-hero assets.
+hardening. **Art-fidelity (see [upgrade path](#art-fidelity-upgrade-path)):** the **hero-asset handcraft pass**
+in Phase-B priority order (classes → bosses → hero props → kit silhouettes, [01](01-art-direction.md) §5) plus
+the [01](01-art-direction.md) §7 look-acceptance pass across the whole slice — the two-tier geometry + UI
+legibility criteria (§7.6–7.7) must hold on every biome.
 **Accept:** a complete expedition (8+ Reaches to a CrawlStar finale encounter) playable solo-with-bots and
 5-player online; a stranger can install nothing, click a link, and be playing inside a minute.
 

@@ -202,13 +202,18 @@ NOT first in a GC'd sim):
 ## 7. Client Architecture
 
 - **Render layer:** Three.js scene fed by the sim snapshot interpolator; PSX pipeline per
-  [01](01-art-direction.md) §2 (low-res render target → post chain → nearest upscale). First-person camera
-  with a smooth shift to third-person orbit (shoulder offset, collision-aware boom); both cameras share the
-  same sim-side aim model so the swap is purely presentational.
+  [01](01-art-direction.md) §2 (low-res render target → post chain → nearest upscale). Materials support the
+  two-tier fidelity model ([01](01-art-direction.md) §2.4–2.5): PS2-tier environment/prop meshes carry
+  normal/height/AO/roughness map sets, N64-tier characters stay light — all under the same modern lighting.
+  First-person camera with a smooth shift to third-person orbit (shoulder offset, collision-aware boom); both
+  cameras share the same sim-side aim model so the swap is purely presentational.
 - **Prediction:** local player movement + gadget traversal are predicted and reconciled
   ([03](03-networking.md) §4); everything else renders from interpolated authoritative snapshots.
 - **UI:** HTML/CSS overlay (DOM) — free text layout/accessibility, styled to the retro spec, driven by the
-  focus-graph for gamepad parity. In-world nameplates/damage numbers are canvas sprites in-scene.
+  focus-graph for gamepad parity. **World-space UI** (nameplates, HP bars, damage numbers, markers) is
+  projected from world space and drawn as a **native-res overlay outside the post chain** — never as in-scene
+  sprites, which the internal-res downscale + dither would render illegible ([01](01-art-direction.md) §3.1;
+  `Client/game/worldLabels.ts`, `combatFx.ts`).
 - **Asset loading:** GLTF/PNG produced by `art-gen` at build time; areas reference kit pieces by id, so an
   area download is a compact descriptor, not geometry ([03](03-networking.md) §5).
 

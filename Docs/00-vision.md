@@ -10,8 +10,10 @@ This document is the canon. Every other document defers to the names, rules, and
 ## 1. Design Pillars
 
 1. **Retro-modern aesthetic.** Low-poly, mid-res, PSX-era presentation (vertex wobble, affine warp, chunky
-   textures, dithering) rendered *underneath* modern lighting, shadows, and post-processing. Nostalgia with
-   teeth. See [01-art-direction.md](01-art-direction.md).
+   textures, dithering) rendered *underneath* modern lighting, shadows, and post-processing. Not flat-boxy
+   everywhere: **PS2-era environments** (curves, bevels, detail) and **N64-era characters**, married by modern
+   surface maps — a memory of a console generation that never existed. Nostalgia with teeth. See
+   [01-art-direction.md](01-art-direction.md).
 2. **High risk = high reward, everywhere.** Depth, Omens, Irradiation, unbanked loot, Dark Shrines, the
    Meridian Peddler — every system offers a dial that trades safety for wealth. The player is always being
    asked: *how greedy are you feeling?*

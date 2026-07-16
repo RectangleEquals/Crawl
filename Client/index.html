@@ -132,6 +132,36 @@
       pointer-events: none;
     }
 
+    /* floating nameplates + HP bars — native-res DOM projected from world space
+       (kept OUT of the internal-res post chain so text stays legible; Docs/01 §3) */
+    .wl-layer { position: fixed; inset: 0; pointer-events: none; z-index: 44; }
+    .wl-label {
+      position: absolute;
+      transform-origin: 50% 100%;
+      text-align: center;
+      white-space: nowrap;
+      will-change: left, top, transform, opacity;
+    }
+    .wl-name {
+      font-family: "DOS VGA", monospace;
+      font-size: 15px;
+      line-height: 1;
+      color: #d8a0a0; /* enemy default */
+      /* hard 1px outline for contrast against any background — crisp, not blurred */
+      text-shadow: 1px 1px 0 #000, -1px 1px 0 #000, 1px -1px 0 #000, -1px -1px 0 #000;
+      margin-bottom: 3px;
+    }
+    .wl-name.wl-party { color: #b8e6a0; }
+    .wl-bar {
+      width: 52px;
+      height: 6px;
+      margin: 0 auto;
+      background: #101014;
+      border: 1px solid #000;
+      box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.55);
+    }
+    .wl-fill { height: 100%; width: 100%; background: #8be06a; }
+
     /* floating damage numbers */
     .fx-numbers { position: fixed; inset: 0; pointer-events: none; z-index: 45; }
     .fx-num {

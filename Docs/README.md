@@ -42,7 +42,7 @@ public co-op up to 5, optional hardcore · **Economy:** Standard + monthly Seaso
 | Doc | Contents |
 |---|---|
 | [00-vision.md](00-vision.md) | Pillars · elevator pitch · lore bible (the Crawl, the Gloam, factions, class motives) · tone · **canonical glossary** |
-| [01-art-direction.md](01-art-direction.md) | PSX-modern render spec · biome style system · two-phase asset pipeline (procedural prototype → guided Blender/Photoshop recipes) |
+| [01-art-direction.md](01-art-direction.md) | PSX-modern render spec · two-tier geometry (PS2 environments / N64 characters) + surface maps · UI legibility law · biome style system · two-phase asset pipeline (procedural prototype → guided Blender/Photoshop recipes) |
 | [02-tech-architecture.md](02-tech-architecture.md) | Monorepo · shared deterministic sim/ECS · Z-up coordinate convention · area streaming · integrated-server singleplayer · input & focus-graph UI |
 | [03-networking.md](03-networking.md) | WebSocket protocol · 30 Hz tick, prediction & lag compensation · generation streaming · sessions, sleep/resume, chat |
 | [04-classes-progression.md](04-classes-progression.md) | Combo-tag system · six classes · passive trees & Keystone Gates · downed/revive mechanics |
@@ -108,6 +108,8 @@ Every criterion from the original brief and subsequent design feedback, mapped t
 | F24 | Non-party visitors: spawn in newest Sanctum, view-only stashes, Sanctum-confined, spectate, auto-advance on boss kill, party-vote governance (accept/kick/timeout/ban, leader=2, 60 s, cascade) | [09](09-modes-social.md) §9, §10 |
 | F25 | Chat channels: `#` global · `$` trade (Sanctum-only) · `>` world (game-server-wide) · `%` party · `@account` private (region-wide) | [09](09-modes-social.md) §11, [Multiplayer/architecture.md](Multiplayer/architecture.md) §4 |
 | F26 | Game-server connection cap (~16: party ≤5 + ~11–15 visitors), figurative pending load testing; all connections in the authoritative physics sim | [03](03-networking.md) §8, [09](09-modes-social.md) §12 |
+| F27 | Not-all-flat geometry: **PS2-tier** environments/props (curves, bevels, radial forms, protruding detail) + **N64-tier** characters, under modern lighting; PBR-ish surface maps (normal/height/AO) blend retro+modern; crystal/prop variation; Director optional-prop decoration layer | [01](01-art-direction.md) §1, §2.4–2.5, §5, §7 |
+| F28 | UI must stay legible through the post chain: all UI native-res; **world-space 3D UI** (nameplates, HP bars, markers) projected as a native-res overlay, never in-scene sprites the downscale/dither would smear | [01](01-art-direction.md) §3.1, [02](02-tech-architecture.md) §7 |
 
 ---
 

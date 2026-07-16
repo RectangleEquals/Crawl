@@ -1,12 +1,17 @@
 /**
  * Placeholder combatant avatars (Docs/08 §1: silhouette-readable). Kind-aware
- * box figures + floating HP bar + tag tint + attack flash + downed pose.
- * Cosmetic; real character art is the Phase-A/B pipeline later.
+ * box figures + tag tint + attack flash + downed pose. Cosmetic; real character
+ * art is the Phase-A/B pipeline later.
+ *
+ * Nameplate + HP bar are NOT in-scene sprites — they'd be smeared illegible by
+ * the internal-res post chain. The avatar exposes the `Labelled` interface and
+ * `WorldLabels` draws them as native-res DOM projected from `writeLabelAnchor`.
  */
 
 import * as THREE from "three";
 import { EntityFlag, TAG_BIT } from "@crawlstar/shared";
 import { psxify } from "../render/psx/materials.js";
+import type { Labelled } from "./worldLabels.js";
 
 interface KindLook {
   color: number;
@@ -21,21 +26,28 @@ const LOOKS: KindLook[] = [
   { color: 0x6f8f4a, scale: 0.95, headTall: false }, // 3 carrion-herald (sickly green)
 ];
 
-export class Avatar {
+export class Avatar implements Labelled {
   readonly group = new THREE.Group();
+  // Labelled surface — consumed by WorldLabels (native-res nameplate/HP overlay).
+  readonly labelName: string;
+  readonly labelParty: boolean;
   private readonly bodyGroup = new THREE.Group();
   private readonly mats: THREE.MeshPhongMaterial[] = [];
   private readonly baseColor: THREE.Color;
   private readonly weapon: THREE.Mesh;
-  private readonly hpBg: THREE.Sprite;
-  private readonly hpFill: THREE.Sprite;
-  private readonly hpBarW = 0.9;
+  private readonly showHp: boolean;
+  private readonly anchorY: number; // local head height × group scale
+  private hp = 1;
   private bobT = 0;
   private downed = false;
 
   constructor(name: string, kind: number, showHp: boolean) {
     const look = LOOKS[kind] ?? LOOKS[0]!;
     this.baseColor = new THREE.Color(look.color);
+    this.labelName = name;
+    this.labelParty = kind === 0;
+    this.showHp = showHp;
+    this.anchorY = 2.12 * look.scale;
     const mat = (): THREE.MeshPhongMaterial => {
       const m = psxify(new THREE.MeshPhongMaterial({ color: this.baseColor.clone(), shininess: 16, emissive: new THREE.Color(0, 0, 0) }));
       this.mats.push(m);
@@ -65,24 +77,23 @@ export class Avatar {
 
     this.group.scale.setScalar(look.scale);
     this.group.add(this.bodyGroup);
-    this.group.add(makeNameplate(name, kind === 0));
+  }
 
-    // floating hp bar
-    this.hpBg = makeBarSprite(0x101014, this.hpBarW, 0.13);
-    this.hpFill = makeBarSprite(0x8be06a, this.hpBarW, 0.1);
-    this.hpBg.position.y = 1.95;
-    this.hpFill.position.y = 1.95;
-    this.hpBg.visible = showHp;
-    this.hpFill.visible = showHp;
-    this.group.add(this.hpBg, this.hpFill);
+  // --- Labelled (native-res nameplate/HP overlay) ---
+  labelHpFrac(): number | null {
+    return this.showHp ? this.hp : null;
+  }
+  labelDowned(): boolean {
+    return this.downed;
+  }
+  writeLabelAnchor(out: THREE.Vector3): void {
+    out.copy(this.group.position);
+    out.y += this.anchorY;
   }
 
   /** hpFrac 0..1, stateFlags/tagFlags from the snapshot. */
   setCombat(hpFrac: number, stateFlags: number, tagFlags: number): void {
-    const w = this.hpBarW * Math.max(0, Math.min(1, hpFrac));
-    this.hpFill.scale.set(w, 0.1, 1);
-    this.hpFill.position.x = -(this.hpBarW - w) / 2;
-    this.hpFill.material.color.setHex(hpFrac > 0.5 ? 0x8be06a : hpFrac > 0.25 ? 0xe0c04a : 0xe0603a);
+    this.hp = Math.max(0, Math.min(1, hpFrac));
 
     this.weapon.visible = (stateFlags & EntityFlag.Attacking) !== 0;
     this.downed = (stateFlags & EntityFlag.Downed) !== 0;
@@ -127,37 +138,6 @@ export class Avatar {
         o.geometry.dispose();
         (o.material as THREE.Material).dispose();
       }
-      if (o instanceof THREE.Sprite) o.material.dispose();
     });
   }
-}
-
-function makeBarSprite(color: number, w: number, h: number): THREE.Sprite {
-  const s = new THREE.Sprite(new THREE.SpriteMaterial({ color, depthTest: false, transparent: true }));
-  s.scale.set(w, h, 1);
-  s.renderOrder = 999;
-  return s;
-}
-
-function makeNameplate(name: string, party: boolean): THREE.Sprite {
-  const canvas = document.createElement("canvas");
-  canvas.width = 256;
-  canvas.height = 40;
-  const ctx = canvas.getContext("2d");
-  if (ctx) {
-    ctx.font = "22px 'DOS VGA', monospace";
-    ctx.textAlign = "center";
-    ctx.fillStyle = "rgba(0,0,0,0.55)";
-    ctx.fillText(name, 130, 30);
-    ctx.fillStyle = party ? "#b8e6a0" : "#d8a0a0";
-    ctx.fillText(name, 128, 28);
-  }
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.magFilter = THREE.NearestFilter;
-  tex.minFilter = THREE.NearestFilter;
-  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true }));
-  sprite.scale.set(0.95, 0.15, 1);
-  sprite.position.y = 2.12;
-  sprite.renderOrder = 1000;
-  return sprite;
 }

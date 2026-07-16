@@ -11,7 +11,10 @@ Related: [04-classes-progression.md](04-classes-progression.md) §2 (tags), [07-
 ## 1. Enemy Design Principles
 
 1. **Readable first.** PSX silhouettes + telegraph language (windup poses, glow cues, audio tells) do the
-   communicating; low-poly is a readability *advantage* when animation is deliberate.
+   communicating; low-poly is a readability *advantage* when animation is deliberate. Creatures follow the
+   **N64-tier** geometry rule ([01](01-art-direction.md) §2.4): chunky, silhouette-first, low-tri — detail
+   comes from proportion, palette, animation and light normal/AO maps, never from geometric density, so a
+   boss-arena swarm still reads instantly at a glance.
 2. **Tag-fluent.** Enemies emit and suffer the same combo tags as players ([04](04-classes-progression.md)
    §2) — a drowned knight *Soaks* you before the eel-priest *Shocks*; players learn combos partly by being
    killed by them.

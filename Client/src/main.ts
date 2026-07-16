@@ -5,6 +5,7 @@ import { renderVecToWorld, worldVecToRender } from "./render/space.js";
 import { buildAreaScene, type FlickerLight } from "./scene/buildArea.js";
 import { GameSession } from "./game/session.js";
 import { Avatar } from "./game/avatar.js";
+import { WorldLabels } from "./game/worldLabels.js";
 import { CombatFx } from "./game/combatFx.js";
 import { InputSystem } from "./input/actions.js";
 import { WsTransport, WorkerTransport, withLatency } from "./net/transports.js";
@@ -58,9 +59,12 @@ let pitch = 0;
 const camPos = new THREE.Vector3();
 
 const avatars = new Map<number, Avatar>();
+const labelEntries = new Map<number, Avatar>(); // reused each frame (name/HP overlay)
+const SELF_LABEL_ID = -1;
 let myAvatar: Avatar | null = null;
 let currentScene: THREE.Scene | null = null;
 let fx: CombatFx | null = null;
+let labels: WorldLabels | null = null;
 
 function rebuildScene(ref: AreaRef, chamber: ChamberData): void {
   const built = buildAreaScene(ref, chamber);
@@ -90,6 +94,8 @@ function rebuildScene(ref: AreaRef, chamber: ChamberData): void {
     fx.setScene(built.scene);
     fx.setSelfId(session.playerId);
   }
+  if (!labels) labels = new WorldLabels(camera, canvas, document.body);
+  else labels.clear();
   hud.setArea(ref.name);
 }
 
@@ -267,6 +273,7 @@ function frame(now: number): void {
   lastRenderTick = renderTick;
   const views = session.entityViews();
   const seen = new Set<number>();
+  labelEntries.clear();
   for (const v of views) {
     seen.add(v.id);
     let a = avatars.get(v.id);
@@ -278,12 +285,19 @@ function frame(now: number): void {
     const s = v.view.sample(renderTick);
     if (s) a.update(new THREE.Vector3(...worldVecToRender(s.pos)), s.yaw, s.anim, dt);
     a.setCombat(v.hpFrac / 255, v.stateFlags, v.tagFlags);
+    labelEntries.set(v.id, a);
   }
   for (const [id, a] of avatars) {
     if (!seen.has(id)) {
       a.dispose();
       avatars.delete(id);
     }
+  }
+
+  // native-res floating nameplates + HP bars (never through the post chain)
+  if (labels) {
+    if (!firstPerson && myAvatar) labelEntries.set(SELF_LABEL_ID, myAvatar);
+    labels.update(labelEntries);
   }
 
   // combat juice
